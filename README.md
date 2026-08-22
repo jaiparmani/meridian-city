@@ -1,59 +1,116 @@
-# MERIDIAN — a city that is the work
+# MERIDIAN
 
-A productivity surface with no task table, no project card, and no list.
-The organisation is rendered as a living city, and you navigate it by moving
-through space rather than by clicking through screens.
+**An organisation rendered as a living city.** No task table, no project card,
+no list — the work *is* the city, and you navigate it by moving through space.
 
-Open `index.html`. No build, no server, no dependencies.
+**→ [Open the city](https://jaiparmani.github.io/meridian-city/)**
+
+No build, no server, no dependencies. Clone it and open `index.html`.
+
+![The whole organisation](docs/organisation.jpg)
 
 ---
 
-## The mapping
+## What the city is
+
+Every element on screen is a real property of the work. Nothing is decoration.
 
 | In the city | In the work |
 |---|---|
-| A **structure** | a project. Its floors are shipped milestones; its lit windows are progress. |
-| **People and vehicles** | tasks in motion. The vehicle's mass is the estimate — a 40-hour task is a truck and accelerates like one. |
-| **Roads** | dependencies, traced through real streets by shortest path. |
-| **Neighbourhoods** | teams. The ground runs from team colour to ember as their load rises. |
-| **Weather** | deadlines. Pressure builds cloud, then rain, then storm cells that drift over the district causing it. |
-| **Traffic jams** | blocked work. A blocked task parks on the dependency it is waiting on and everything queues behind it. |
-| **Rising light** | finished work, flying downtown to the org core. |
-| **The spire** | the organisation. One ring per team, brightening as work lands. |
+| **A structure** | a project. Floors are milestones shipped; lit windows are progress, filling from the ground up. |
+| **A tower vs. a slab** | just architecture — but height tracks how much has actually landed. |
+| **People and vehicles** | tasks in motion. A task's estimate is its **mass**: a 3-hour fix is a pedestrian, a 40-hour migration is a truck that accelerates slowly and takes an age to clear a junction. |
+| **Roads** | dependencies, routed by shortest path through streets that actually exist. |
+| **Neighbourhoods** | teams. The ground runs from the team's colour toward ember as their load rises. |
+| **Weather** | deadlines. Pressure builds cloud, then rain, then storm cells that drift over the district causing them. Lightning rattles the camera. |
+| **A traffic jam** | blocked work — and the jam is not a metaphor. See below. |
+| **Rising motes of light** | finished work, falling toward downtown under gravity. |
+| **The spire downtown** | the organisation itself. One ring per team; it brightens as work lands and shifts from cyan to ember as risk climbs. |
+| **Grey blocks, parks, lamps** | civic fabric. They carry no data. They exist so the things that do have somewhere to stand. |
+
+### The jam is the point
+
+A blocked task does not turn red in a list. It **drives to the thing it is
+waiting on and parks there.** Traffic behind it slows, queues, and backs up
+through the junction. Congestion bleeds into every touching road at 46% per
+hop, so one stalled dependency reddens a whole corridor — and when it clears,
+the corridor drains from the outside in.
+
+This is why the city can seize. It is also why clearing a blockage feels like
+something.
 
 ## Five altitudes
 
 `ORGANISATION → NEIGHBOURHOOD → PROJECT → TASK → ACTIVITY`
 
-Zoom is continuous; the altitude labels only name where you are. Detail is
-earned by descending: at height a tower is just the light it emits, at street
-level it has floor bands, windows, a crane, and a beacon. Map symbols work the
-other way — dependency flow arrows are bright from above and fade out as you
-reach the street, because at street level the road itself is the evidence.
+Zoom is continuous; the labels only name where you are. Detail is *earned* by
+descending — from height a tower is just the light it emits; at street level it
+has floor bands, windows, a crane, a beacon, and pedestrians.
+
+Map symbols work in reverse. Dependency flow arrows are bright from above and
+fade out as you reach the street, because down there the road itself is the
+evidence.
+
+![A neighbourhood under load](docs/neighbourhood.jpg)
+
+## Commanding the city
+
+Select anything and its commands **orbit it** — you reach for the city, not for
+a toolbar. Every command has a physical consequence you can watch happen.
+
+![Commands orbiting a structure](docs/commands.jpg)
+
+**On a structure**
+
+| | |
+|---|---|
+| `▲ SHIP` | close a milestone — the tower gains a floor, dust rings across the ground, the crane climbs |
+| `⇢ SURGE` | three new tasks drive in off the coast road |
+| `⊕ EXTEND` | push the deadline out — the weather over that district eases |
+| `✦ FOCUS` | prioritise it — work moves faster here, and windows start lighting |
+
+**On a task**
+
+| | |
+|---|---|
+| `⊘ CLEAR` | unblock it — watch the queue behind it drain |
+| `⏵ EXPEDITE` | it moves and finishes faster |
+| `⟲ REROUTE` | send it around the congestion |
+| `⊗ HOLD` | stop it where it stands, and see what that costs everyone behind it |
+
+**On a neighbourhood**
+
+| | |
+|---|---|
+| `✚ HIRE` | a car comes in off the highway; capacity goes up |
+| `❖ ALL HANDS` | every blockage in the district clears at once |
+| `◈ CRUNCH` | everything here moves faster — and the pressure climbs |
+
+Commands recharge on a cooldown that sweeps around the dial, and their effects
+**wear off**, so the city drifts back to its own equilibrium if you leave it
+alone. Your commands appear in the signal feed marked `▸`, distinct from what
+the city did on its own.
 
 ## Physics, not state changes
 
 Nothing pops into existence.
 
-- New work **drives in** through a city gate on the shore and takes the
-  highway to its building.
-- A blockage doesn't recolour a row — the task **drives to the thing it is
-  waiting on and stops there**. Vehicles behind it slow, then queue, then back
-  up through the junction. Congestion bleeds into touching roads at 46% per
-  hop, so a single stall reddens a whole corridor and clears from the outside in.
-- A milestone landing **raises a floor**: the tower grows, dust rings out
-  across the ground, the crane climbs, windows light from the ground up.
-- A finished task is **absorbed** by its building and leaves as motes of light
-  that fall toward downtown under gravity and charge the core.
-- Idle projects **decay** — unlit windows, dimming facades.
-- Mass matters: heavy tasks accelerate slowly and take longer to clear a jam.
+- New work **drives in** through a coast gate and takes the highway to its building.
+- Mass means momentum — heavy tasks are slow to start and slow to stop.
+- Idle projects **decay**: windows go dark on their own.
+- Finished work is **absorbed** by its building, then leaves as light that falls
+  downtown and charges the core.
+- The event stream runs on explicit per-second rates, tuned so the city holds a
+  steady state: ~105 tasks in progress, ~50 arriving, ~11 blocked, indefinitely.
+
+![Street level](docs/street.jpg)
 
 ## Controls
 
 | | |
 |---|---|
 | drag | move over the city |
-| scroll | altitude (anchored on the cursor) |
+| scroll | altitude, anchored exactly on the cursor |
 | shift+drag, `Q`/`E` | rotate |
 | click | building → project · vehicle → task · ground → team |
 | double-click | descend into whatever is under the cursor |
@@ -61,28 +118,32 @@ Nothing pops into existence.
 | `F` | lock onto a moving task and ride with it |
 | `1`–`5` | jump to an altitude |
 | `space` | hold time |
-| `H` | legend |
+| `H` | the legend |
 | `R` | reset rotation |
 
-When you are tracking something, anything standing between you and it turns to
-glass, and a locator beam marks it through the skyline.
+When you track something, anything standing between you and it turns to glass,
+and a locator beam marks it through the skyline.
 
-## Files
+![The legend](docs/legend.jpg)
+
+## Under the hood
+
+Canvas 2D, axonometric projection, one camera. ~80fps with 330 agents, 25
+project towers, 1,264 civic structures and 287 road edges.
 
 ```
 index.html      shell
 css/style.css   frame
 js/util.js      math, noise, easing, colour
-js/data.js      the organisation: teams, projects, tasks, and the event stream
+js/data.js      the organisation, and the event rates that drive it
 js/city.js      island, neighbourhoods, road graph, plots, dependency routing
 js/sim.js       agents, car-following, congestion spread, weather, effects
-js/render.js    camera and the axonometric renderer
-js/hud.js       instrumentation, tracking labels, readouts
+js/actions.js   the commands, and what each one does to the city
+js/render.js    camera and renderer
+js/hud.js       instrumentation, tracking labels, readouts, command ring
 js/main.js      boot, input, picking, navigation
 ```
 
-Everything is deterministic from a seed, so the same city is laid out every
-time; only the live event stream differs.
-
-`window.APP` exposes `{org, city, sim, cam, ui, flyTo, gotoLevel, select}` for
-inspection.
+Layout is deterministic from a seed, so the same city is built every time; only
+the live event stream differs. `window.APP` exposes
+`{org, city, sim, cam, ui, flyTo, gotoLevel, select}` for poking at it live.

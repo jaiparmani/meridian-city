@@ -17,6 +17,9 @@ class HUD {
     this.panelFrom = { x: 0, y: 0 };
     this.feedT = 0;
     this.boot = 0;
+    this.ringT = 0;
+    this.ringNodes = [];
+    this.nodeT = new Map();
   }
 
   lab(id) {
@@ -29,6 +32,7 @@ class HUD {
     this.dt = dt;
     this.boot = Math.min(1, this.boot + dt * 0.55);
     const W = cam.W, H = cam.H;
+    this.W = W; this.H = H;
     ctx.save();
     ctx.textBaseline = 'middle';
     ctx.lineJoin = 'round';
@@ -439,7 +443,7 @@ class HUD {
   detail(ctx, sim, cam, ui, R, dt) {
     const target = ui.selected;
     this.panelT = damp(this.panelT, target ? 1 : 0, 7, dt);
-    if (this.panelT < 0.02) { this.lastSel = null; this.panelBox = null; return; }
+    if (this.panelT < 0.02) { this.lastSel = null; this.panelBox = null; this.ringNodes = []; return; }
     const sel = target || this.lastSel;
     if (target) this.lastSel = target;
     if (!sel) return;
@@ -465,6 +469,8 @@ class HUD {
     let py = clamp(anchor.y - h * 0.5, 76, cam.H - h - 130);
 
     this.panelBox = [px - 12, py - 10, w + 24, h + 20];
+    this.commandRing(ctx, sim, ui, anchor, hue, leftRoom, dt, t);
+
     ctx.save();
     // tether
     ctx.strokeStyle = hsl(hue, 85, 70, 0.55 * t);
@@ -505,6 +511,110 @@ class HUD {
     if (sel.type === 'project') this.projectReadout(ctx, sim, org.byId[sel.id], hue, w, h);
     else if (sel.type === 'task') this.taskReadout(ctx, sim, org.byId[sel.id], hue, w, h);
     else this.teamReadout(ctx, sim, sim.city.districts[sel.id], hue, w, h);
+    ctx.restore();
+  }
+
+  /* ---- the command ring ---------------------------------
+     Actions orbit the thing they act on. You reach for the
+     city, not for a toolbar.
+  ------------------------------------------------------- */
+  commandRing(ctx, sim, ui, anchor, hue, panelLeft, dt, panelT) {
+    const acts = actionsFor(sim, ui.selected);
+    this.ringT = damp(this.ringT, ui.selected ? 1 : 0, 7, dt);
+    this.ringNodes = [];
+    if (!acts.length || this.ringT < 0.02) return;
+
+    const n = acts.length;
+    const R = 92;
+    const centre = panelLeft ? 0 : PI;      // fan away from the readout
+    const spread = Math.min(2.0, 0.52 * (n - 1));
+    ctx.save();
+    for (let i = 0; i < n; i++) {
+      const { def, ok, cool } = acts[i];
+      const ang = centre + (n === 1 ? 0 : (i - (n - 1) / 2) * (spread / (n - 1)));
+      const key = def.id;
+      const stagger = clamp(remap(this.ringT, i * 0.07, i * 0.07 + 0.45, 0, 1));
+      const g = easeBack(stagger) * this.ringT;
+      const hov = ui.ringHover === i;
+      let ht = this.nodeT.get(key) || 0;
+      ht = damp(ht, hov ? 1 : 0, 12, dt);
+      this.nodeT.set(key, ht);
+
+      const rr2 = R * g * (1 + ht * 0.09);
+      const x = anchor.x + Math.cos(ang) * rr2;
+      const y = anchor.y + Math.sin(ang) * rr2 * 0.86;
+      const rad = 17 + ht * 3.5;
+      const live = ok && cool <= 0;
+      this.ringNodes.push({ x, y, r: rad + 5, def, ok: live, index: i });
+      if (g < 0.05) continue;
+
+      // spoke
+      ctx.strokeStyle = hsl(hue, 80, 68, 0.20 * g);
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(anchor.x, anchor.y);
+      ctx.lineTo(x - Math.cos(ang) * rad, y - Math.sin(ang) * rad * 0.86);
+      ctx.stroke();
+
+      // dial
+      ctx.globalAlpha = g;
+      ctx.beginPath(); ctx.arc(x, y, rad, 0, TAU);
+      ctx.fillStyle = live ? `rgba(8,20,28,${0.86 + ht * 0.1})` : 'rgba(8,14,20,0.6)';
+      ctx.fill();
+      ctx.strokeStyle = live ? hsl(hue, 85, 66, 0.55 + ht * 0.45) : 'rgba(120,145,165,0.28)';
+      ctx.lineWidth = live ? 1.4 + ht : 1;
+      ctx.stroke();
+      if (live && ht > 0.01) {
+        ctx.strokeStyle = hsl(hue, 90, 70, 0.28 * ht);
+        ctx.lineWidth = 6 * ht; ctx.stroke();
+      }
+      // cooldown sweeps away
+      if (cool > 0) {
+        const frac = clamp(cool / def.cool);
+        ctx.strokeStyle = 'rgba(255,170,80,0.75)';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(x, y, rad + 3, -PI / 2, -PI / 2 + TAU * frac);
+        ctx.stroke();
+      }
+      // glyph
+      ctx.textAlign = 'center';
+      ctx.font = `600 ${13 + ht * 2}px ${MONO}`;
+      ctx.fillStyle = live ? (ht > 0.4 ? '#ffffff' : hsl(hue, 90, 78, 0.95)) : 'rgba(150,175,195,0.4)';
+      ctx.fillText(def.glyph, x, y + 1);
+      ctx.font = `600 8px ${MONO}`;
+      ctx.fillStyle = live ? 'rgba(214,238,250,0.9)' : 'rgba(150,175,195,0.35)';
+      ctx.fillText(def.label, x, y + rad + 11);
+      ctx.globalAlpha = 1;
+    }
+
+    // what the hovered command will do to the city
+    const hv = acts[ui.ringHover];
+    if (hv && this.ringT > 0.6) {
+      const node = this.ringNodes[ui.ringHover];
+      const msg = hv.cool > 0 ? `recharging · ${hv.cool.toFixed(1)}s`
+        : hv.ok ? hv.def.hint : 'not available here';
+      ctx.textAlign = 'center';
+      ctx.font = `500 9px ${MONO}`;
+      const tw = ctx.measureText(msg).width + 18;
+      // keep the caption on screen and clear of the readout
+      let tx = clamp(node.x, tw / 2 + 8, this.W - tw / 2 - 8);
+      if (this.panelBox) {
+        const [bx, by, bw, bh] = this.panelBox;
+        const ty0 = node.y + node.r + 16;
+        if (tx + tw / 2 > bx && tx - tw / 2 < bx + bw && ty0 < by + bh && ty0 + 18 > by) {
+          tx = Math.max(tw / 2 + 8, bx - tw / 2 - 10);
+        }
+      }
+      const ty = node.y + node.r + 26;
+      ctx.fillStyle = 'rgba(8,18,26,0.92)';
+      roundRectPath(ctx, tx - tw / 2, ty - 10, tw, 18, 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(127,233,255,0.18)'; ctx.lineWidth = 1; ctx.stroke();
+      ctx.fillStyle = hv.cool > 0 ? 'rgba(255,180,110,0.95)'
+        : hv.ok ? 'rgba(220,242,252,0.95)' : 'rgba(160,185,205,0.6)';
+      ctx.fillText(msg, tx, ty);
+    }
     ctx.restore();
   }
 
@@ -704,9 +814,15 @@ class HUD {
       if (a <= 0) return;
       const y = y0 + i * 14;
       ctx.fillStyle = hsl(n.hue, 85, 68, a);
-      ctx.fillRect(x, y - 3, 3, 3);
-      ctx.fillStyle = `rgba(215,236,248,${a * 0.92})`;
-      ctx.fillText(n.text.length > 44 ? n.text.slice(0, 43) + '…' : n.text, x + 10, y);
+      if (n.player) {
+        ctx.fillRect(x - 1, y - 4, 5, 5);
+        ctx.fillStyle = `rgba(255,214,140,${a})`;
+        ctx.fillText('▸ ' + (n.text.length > 42 ? n.text.slice(0, 41) + '…' : n.text), x + 10, y);
+      } else {
+        ctx.fillRect(x, y - 3, 3, 3);
+        ctx.fillStyle = `rgba(215,236,248,${a * 0.92})`;
+        ctx.fillText(n.text.length > 44 ? n.text.slice(0, 43) + '…' : n.text, x + 10, y);
+      }
     });
     ctx.restore();
   }
@@ -727,8 +843,8 @@ class HUD {
     ctx.fillText('SIX NEIGHBOURHOODS · TWENTY-FIVE STRUCTURES · EVERY VEHICLE IS A TASK', cam.W / 2, y - 16);
     ctx.font = `600 11px ${MONO}`;
     ctx.fillStyle = CY;
-    ctx.fillText('SCROLL TO DESCEND     ·     PRESS  H  TO READ THE CITY', cam.W / 2, y + 2);
-    const w = 300;
+    ctx.fillText('SCROLL TO DESCEND  ·  CLICK ANYTHING TO COMMAND IT  ·  H FOR THE LEGEND', cam.W / 2, y + 2);
+    const w = 430;
     ctx.strokeStyle = `rgba(127,233,255,${0.25 * a})`;
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -738,7 +854,7 @@ class HUD {
   }
 
   helpCard(ctx, cam) {
-    const w = 420, h = 250, x = cam.W / 2 - w / 2, y = cam.H / 2 - h / 2;
+    const w = 440, h = 320, x = cam.W / 2 - w / 2, y = cam.H / 2 - h / 2;
     ctx.save();
     roundRectPath(ctx, x, y, w, h, 4);
     ctx.fillStyle = 'rgba(6,14,22,0.92)'; ctx.fill();
@@ -756,6 +872,11 @@ class HUD {
       ['NEIGHBOURHOOD', 'a team. haze = deadline pressure.'],
       ['STORMS', 'deadlines closing in on that district.'],
       ['RISING LIGHT', 'finished work flying to the core.'],
+      ['', ''],
+      ['SELECT ANYTHING', 'commands orbit it. click one to act.'],
+      ['▲ SHIP  ⇢ SURGE', 'add a floor · call in more work'],
+      ['⊘ CLEAR  ⏵ EXPEDITE', 'drain a jam · push a task through'],
+      ['❖ ALL HANDS  ◈ CRUNCH', 'clear a district · drive it harder'],
       ['', ''],
       ['DRAG / SCROLL', 'move · change altitude'],
       ['SHIFT+DRAG / Q E', 'rotate the city'],

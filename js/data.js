@@ -122,6 +122,8 @@ function buildOrg() {
         deadlineDay: rr(2.5, 26),
         tasks: [],
         risk: 0,
+        priority: 1,
+        focusUntil: 0,
         lastShip: -99,
         activity: 0,
       };
@@ -151,7 +153,7 @@ function buildOrg() {
   org.projects.forEach((p) => {
     const n = ri(4, 9);
     for (let i = 0; i < n; i++) {
-      const t = makeTask(p, org, chance(0.72) ? ST.ACTIVE : ST.INBOUND);
+      const t = makeTask(p, org, chance(0.90) ? ST.ACTIVE : ST.INBOUND);
       if (t.state === ST.ACTIVE) t.done = rr(0, 0.7);
       p.tasks.push(t.id);
       org.tasks.push(t);
@@ -214,7 +216,7 @@ function stepOrg(org, dt, sim) {
     t.heat = Math.max(0, t.heat - dt * 0.035);
     if (t.state === ST.ACTIVE) {
       const p = org.byId[t.project];
-      const rate = (1 / (t.hours * SEC_PER_HOUR)) * dt;
+      const rate = (1 / (t.hours * SEC_PER_HOUR)) * dt * (p.priority || 1) * (t.boost || 1);
       t.done = clamp(t.done + rate);
       p.activity = Math.min(1, p.activity + dt * 0.12);
       if (t.done >= 1) queueEvent(org, { type: 'complete', task: t.id });
@@ -223,14 +225,34 @@ function stepOrg(org, dt, sim) {
 
   org.projects.forEach((p) => {
     p.activity = Math.max(0, p.activity - dt * 0.05);
+    // deliberate pushes wear off, so the city drifts back on its own
+    if (p.focusUntil && org.day > p.focusUntil) { p.priority = 1; p.focusUntil = 0; }
     recomputeProject(p, org);
   });
+  org.tasks.forEach((t) => {
+    if (t.boost) { t.boost = Math.max(1, t.boost - dt * 0.06); if (t.boost <= 1.01) t.boost = 0; }
+  });
+  org.teams.forEach((tm) => { if (tm.crunchUntil && org.day > tm.crunchUntil) tm.crunchUntil = 0; });
 
-  // stochastic events, scaled by city size
-  org._acc = (org._acc || 0) + dt;
-  while (org._acc > 1.6) {
-    org._acc -= 1.6;
-    rollEvent(org);
+  // retire old finished work so a long session does not grow without bound
+  if (org.tasks.length > 420) {
+    const spent = org.tasks.filter((t) => t.state === ST.DONE);
+    spent.sort((a, b) => a.createdDay - b.createdDay);
+    for (const t of spent.slice(0, org.tasks.length - 380)) {
+      const p = org.byId[t.project];
+      if (p) p.tasks = p.tasks.filter((id) => id !== t.id);
+      delete org.byId[t.id];
+      t.retired = true;
+    }
+    org.tasks = org.tasks.filter((t) => !t.retired);
+  }
+
+  // each kind of event runs on its own clock, so the city can be
+  // balanced directly instead of by fighting over one dice roll
+  if (!org._acc) org._acc = { arrive: 0, block: 0, unblock: 0, review: 0, milestone: 0 };
+  for (const kind in EVENT_RATE) {
+    org._acc[kind] += dt * EVENT_RATE[kind];
+    while (org._acc[kind] >= 1) { org._acc[kind] -= 1; fireEvent(org, kind); }
   }
   return drainEvents(org);
 }
@@ -238,40 +260,68 @@ function stepOrg(org, dt, sim) {
 function queueEvent(org, ev) { org.events.push(ev); }
 function drainEvents(org) { const e = org.events; org.events = []; return e; }
 
-function rollEvent(org) {
-  const r = Math.random();
-  const open = org.tasks.filter((t) => t.state !== ST.DONE);
-  if (!open.length) return;
+/* events per second, across the whole city. These are the dials
+   that decide whether the city fills up or drains away. */
+const EVENT_RATE = {
+  arrive: 0.78,     // new work off the highway
+  block: 0.055,     // something stalls on a dependency
+  unblock: 0.110,   // something gets cleared
+  review: 0.09,     // work goes out for review
+  milestone: 0.018, // a floor gets added somewhere
+};
+const OPEN_CEILING = 190;
 
-  if (r < 0.24) {
-    // new work arrives from outside the city
-    const p = org.projects[Math.floor(Math.random() * org.projects.length)];
+function fireEvent(org, kind) {
+  const open = org.tasks.filter((t) => t.state !== ST.DONE);
+  const R = Math.random;
+
+  if (kind === 'arrive') {
+    if (open.length >= OPEN_CEILING) return;
+    // work lands where there is capacity and pressure, not uniformly
+    const weighted = [];
+    org.projects.forEach((p) => {
+      if (p.progress >= 1) return;
+      const w = 1 + p.risk * 1.5 + (p.priority > 1 ? 1.5 : 0);
+      for (let i = 0; i < Math.ceil(w); i++) weighted.push(p);
+    });
+    const p = weighted.length ? weighted[Math.floor(R() * weighted.length)]
+      : org.projects[Math.floor(R() * org.projects.length)];
     queueEvent(org, { type: 'arrive', project: p.id });
-  } else if (r < 0.40) {
-    // something gets blocked
-    const cands = open.filter((t) => t.state === ST.ACTIVE);
+    return;
+  }
+  if (kind === 'block') {
+    const cands = open.filter((t) => t.state === ST.ACTIVE &&
+      org.deps.some((d) => d.to === t.project));
     if (!cands.length) return;
-    const t = cands[Math.floor(Math.random() * cands.length)];
+    const t = cands[Math.floor(R() * cands.length)];
     const ups = org.deps.filter((d) => d.to === t.project);
-    if (!ups.length) return;
-    queueEvent(org, { type: 'block', task: t.id, by: ups[Math.floor(Math.random() * ups.length)].from });
-  } else if (r < 0.68) {
-    // something gets unblocked
+    queueEvent(org, { type: 'block', task: t.id, by: ups[Math.floor(R() * ups.length)].from });
+    return;
+  }
+  if (kind === 'unblock') {
     const cands = open.filter((t) => t.state === ST.BLOCKED);
     if (!cands.length) return;
-    queueEvent(org, { type: 'unblock', task: cands[Math.floor(Math.random() * cands.length)].id });
-  } else if (r < 0.86) {
-    // a task moves into review
+    // the ones that have waited longest clear first
+    cands.sort((a, b) => b.age - a.age);
+    const pickFrom = cands.slice(0, Math.max(1, Math.ceil(cands.length / 2)));
+    queueEvent(org, { type: 'unblock', task: pickFrom[Math.floor(R() * pickFrom.length)].id });
+    return;
+  }
+  if (kind === 'review') {
     const cands = open.filter((t) => t.state === ST.ACTIVE && t.done > 0.5);
     if (!cands.length) return;
-    queueEvent(org, { type: 'review', task: cands[Math.floor(Math.random() * cands.length)].id });
-  } else {
-    // a milestone lands — the building grows a floor
-    const cands = org.projects.filter((p) => p.milestones.some((m) => !m.done) && p.progress > 0.1);
+    queueEvent(org, { type: 'review', task: cands[Math.floor(R() * cands.length)].id });
+    return;
+  }
+  if (kind === 'milestone') {
+    const cands = org.projects.filter((p) => p.milestones.some((m) => !m.done) && p.progress > 0.15);
     if (!cands.length) return;
-    queueEvent(org, { type: 'milestone', project: cands[Math.floor(Math.random() * cands.length)].id });
+    // whichever project has done the most work earns the floor
+    cands.sort((a, b) => b.progress - a.progress);
+    const top = cands.slice(0, Math.max(1, Math.ceil(cands.length / 3)));
+    queueEvent(org, { type: 'milestone', project: top[Math.floor(R() * top.length)].id });
   }
 }
 
 const SEC_PER_DAY = 78;    // one simulated day of deadline pressure
-const SEC_PER_HOUR = 7.0;  // one task-hour of effort
+const SEC_PER_HOUR = 22.0; // one task-hour of effort

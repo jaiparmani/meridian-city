@@ -18,6 +18,8 @@ class Sim {
     this.speed = 1;
     this.coreCharge = 0;
     this.narration = [];
+    this.cools = new Map();
+    this.commands = 0;
     this.weather = { storm: 0, stormT: 0, rain: 0, wind: 0.5, flash: 0, nextBolt: 8, cloud: 0.25 };
     this.pulse = new Array(160).fill(0);
     this.pulseAcc = 0;
@@ -47,7 +49,7 @@ class Sim {
     this.byTask[task.id] = a;
 
     if (task.state === ST.BLOCKED && task.blockedBy) this.sendToBlocker(a);
-    else if (task.state === ST.INBOUND || (initial && chance(0.25))) this.sendInbound(a);
+    else if (task.state === ST.INBOUND || (initial && chance(0.07))) this.sendInbound(a);
     else this.circulate(a);
     return a;
   }
@@ -86,7 +88,13 @@ class Sim {
 
   sendInbound(a) {
     const city = this.city;
-    const gate = pick(city.gates);
+    // the nearest gate, so arriving work crosses the city rather than the map
+    let gate = city.gates[0], bd = Infinity;
+    for (const g of city.gates) {
+      const n = city.nodes[g];
+      const q = dist2(n.x, n.y, a.home.x, a.home.y);
+      if (q < bd) { bd = q; gate = g; }
+    }
     a.mode = 'toBuilding';
     a.task.state = ST.INBOUND;
     a.alpha = 0;
@@ -101,6 +109,13 @@ class Sim {
       if (p) this.setPath(a, p); else a.mode = 'idle';
       a.mode = 'circulate';
       return;
+    }
+    // a task that starts wandering has, by definition, arrived: if it
+    // never flips out of INBOUND it freezes and the work never begins
+    if (a.task && a.task.state === ST.INBOUND) {
+      a.task.state = ST.ACTIVE;
+      a.task.log.push({ day: this.org.day, text: 'started' });
+      a.home.glow = Math.min(1.4, a.home.glow + 0.3);
     }
     const d = city.districts[a.home.district];
     const from = a.path ? a.path[a.pi] : a.home.driveNode;
@@ -218,9 +233,18 @@ class Sim {
       hue: b.hue, life: 0, max: rr(4.5, 7), phase: 0, seed: rnd(),
     });
   }
-  say(text, hue) {
-    this.narration.unshift({ text, hue, t: this.time });
+  say(text, hue, player) {
+    this.narration.unshift({ text, hue, t: this.time, player: !!player });
     if (this.narration.length > 26) this.narration.pop();
+  }
+
+  /* command cooldowns, so the city cannot be spammed flat */
+  cooldown(id, targetId) {
+    const t = this.cools.get(id + ':' + targetId);
+    return t === undefined ? 0 : Math.max(0, t - this.time);
+  }
+  setCooldown(id, targetId, secs) {
+    this.cools.set(id + ':' + targetId, this.time + secs);
   }
 
   /* ---------- main step ---------------------------------- */
@@ -263,8 +287,8 @@ class Sim {
     // order along each edge so vehicles can see the one in front
     for (const e of E) {
       if (e.agents.length > 1) e.agents.sort((p, q) => (p.dir - q.dir) || (p.s - q.s));
-      const cap = Math.max(2.5, e.len / 11);
-      e.own = clamp((e.stopMass * 2.0 + e.mass * 0.10) / cap, 0, 1);
+      const cap = Math.max(3.5, e.len / 9);
+      e.own = clamp((e.stopMass * 2.0 + e.mass * 0.055) / cap, 0, 1);
     }
     // bleed congestion into connected roads (this is the "spread"), decaying per hop
     for (const e of E) {
@@ -307,6 +331,8 @@ class Sim {
       }
 
       let want = a.vmax * this.jamSpeed(e);
+      if (e.kind === 'highway') want *= 1.7;
+      else if (e.kind === 'avenue' || e.kind === 'ring') want *= 1.3;
       if (a.kind === 'walk') want *= 0.9 + 0.2 * Math.sin(a.life * 3 + a.wob);
 
       // car-following: never pass through the body in front
@@ -361,6 +387,9 @@ class Sim {
     let best = null, bd = Infinity;
     for (const q of list) {
       if (q === a || q.dir !== a.dir) continue;
+      // a task parked on a dependency is at the kerb, not in the lane:
+      // traffic squeezes past it slowly rather than damming forever
+      if (q.task.state === ST.BLOCKED && q.park >= 0) continue;
       const d = q.s - a.s;
       if (d > 0 && d < bd) { bd = d; best = q; }
     }
@@ -476,6 +505,7 @@ class Sim {
       projects.forEach((p) => { press += clamp(p.risk, 0, 1.6); blocked += p.blocked; });
       press = press / Math.max(1, projects.length);
       press = clamp(press * 0.8 + clamp(blocked / 6) * 0.35, 0, 1.3);
+      if (d.clearing > 0) { d.clearing = Math.max(0, d.clearing - dt * 0.35); press *= 1 - d.clearing * 0.6; }
       d.pressure = damp(d.pressure, press, 0.5, dt);
       d.storm = damp(d.storm, clamp((d.pressure - 0.34) / 0.7), 0.35, dt);
       total += d.pressure;

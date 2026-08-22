@@ -15,6 +15,7 @@ const hud = new HUD();
 const ui = {
   selected: null, hover: null, focusTeam: null,
   help: false, paused: false, hotDeps: null, level: LOD.ORG,
+  ringHover: -1,
 };
 
 /* structures rise out of the ground on a wave from downtown */
@@ -85,6 +86,9 @@ window.addEventListener('mousemove', (e) => {
     }
     drag.x = e.clientX; drag.y = e.clientY;
   } else {
+    const node = ringAt(e.clientX, e.clientY);
+    ui.ringHover = node ? node.index : -1;
+    if (node) { ui.hover = null; canvas.style.cursor = node.ok ? 'pointer' : 'not-allowed'; return; }
     ui.hover = pickAt(e.clientX, e.clientY);
     canvas.style.cursor = ui.hover ? 'crosshair' : 'grab';
   }
@@ -99,7 +103,10 @@ window.addEventListener('mouseup', (e) => {
   drag = null; canvas.style.cursor = 'grab';
 });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-canvas.addEventListener('dblclick', (e) => { descend(e.clientX, e.clientY); });
+canvas.addEventListener('dblclick', (e) => {
+  if (ringAt(e.clientX, e.clientY)) return;
+  descend(e.clientX, e.clientY);
+});
 
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
@@ -191,8 +198,21 @@ function pickAt(mx, my) {
   return null;
 }
 
+/* the command ring sits on top of the world */
+function ringAt(mx, my) {
+  for (const n of hud.ringNodes) {
+    if (dist2(n.x, n.y, mx, my) < n.r * n.r) return n;
+  }
+  return null;
+}
+
 function click(mx, my, wasRot) {
   if (wasRot) return;
+  const node = ringAt(mx, my);
+  if (node) {
+    if (runAction(sim, ui.selected, node.def)) cam.shake = Math.max(cam.shake, 0.12);
+    return;
+  }
   const hit = pickAt(mx, my);
   if (!hit) { select(null); return; }
   select(hit);
@@ -346,5 +366,5 @@ requestAnimationFrame(frame);
 setTimeout(() => { cam.ts = 0.95; }, 300);
 
 /* expose the running city for inspection / automation */
-window.APP = { org, city, sim, cam, ui, hud, R, flyTo, gotoLevel, select, pickAt,
+window.APP = { org, city, sim, cam, ui, hud, R, flyTo, gotoLevel, select, pickAt, ringAt,
   get fps() { return fps; } };
