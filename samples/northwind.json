@@ -1,0 +1,758 @@
+{
+  "name": "NORTHWIND",
+  "teams": [
+    {
+      "name": "Platform",
+      "tag": "PLT",
+      "hue": 196,
+      "motto": "runtime \u00b7 infra",
+      "people": [
+        "Ada Vane",
+        "Ken Lund",
+        "Grace Okoro",
+        "Omar Reyes",
+        "Rin Sato"
+      ]
+    },
+    {
+      "name": "Payments",
+      "tag": "PAY",
+      "hue": 150,
+      "motto": "money movement",
+      "people": [
+        "Nina Braun",
+        "Tomas Kaur",
+        "Priya Novak",
+        "Jae Moreau"
+      ]
+    },
+    {
+      "name": "Client",
+      "tag": "CLI",
+      "hue": 34,
+      "motto": "web \u00b7 mobile",
+      "people": [
+        "Iris Chen",
+        "Cyrus Weiss",
+        "Mira Halloran",
+        "Devon Ibarra",
+        "Hana Ferris"
+      ]
+    },
+    {
+      "name": "Risk",
+      "tag": "RSK",
+      "hue": 286,
+      "motto": "fraud \u00b7 compliance",
+      "people": [
+        "Luca Dubois",
+        "Zoe Adeyemi",
+        "Ravi Vane",
+        "Noor Lund"
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "name": "Ledger Core",
+      "team": "Platform",
+      "milestones": [
+        "scoping",
+        "spike",
+        "alpha",
+        "integration",
+        "hardening",
+        "beta",
+        "ga"
+      ],
+      "done": 4,
+      "deadlineDays": 6.5,
+      "scale": 1.0
+    },
+    {
+      "name": "Event Bus",
+      "team": "Platform",
+      "milestones": [
+        "scoping",
+        "alpha",
+        "integration",
+        "beta",
+        "ga"
+      ],
+      "done": 2,
+      "deadlineDays": 14.0,
+      "scale": 0.85
+    },
+    {
+      "name": "Config Vault",
+      "team": "Platform",
+      "milestones": [
+        "scoping",
+        "alpha",
+        "ga"
+      ],
+      "done": 1,
+      "deadlineDays": 22.0,
+      "scale": 0.6
+    },
+    {
+      "name": "Settlement",
+      "team": "Payments",
+      "milestones": [
+        "scoping",
+        "spike",
+        "alpha",
+        "integration",
+        "beta",
+        "ga"
+      ],
+      "done": 3,
+      "deadlineDays": 4.0,
+      "scale": 0.95
+    },
+    {
+      "name": "Payout Rails",
+      "team": "Payments",
+      "milestones": [
+        "scoping",
+        "alpha",
+        "integration",
+        "ga"
+      ],
+      "done": 1,
+      "deadlineDays": 17.0,
+      "scale": 0.75
+    },
+    {
+      "name": "Checkout v3",
+      "team": "Client",
+      "milestones": [
+        "scoping",
+        "spike",
+        "alpha",
+        "integration",
+        "hardening",
+        "ga"
+      ],
+      "done": 2,
+      "deadlineDays": 9.0,
+      "scale": 0.9
+    },
+    {
+      "name": "Wallet App",
+      "team": "Client",
+      "milestones": [
+        "scoping",
+        "alpha",
+        "beta",
+        "ga"
+      ],
+      "done": 3,
+      "deadlineDays": 3.0,
+      "scale": 0.8
+    },
+    {
+      "name": "Design Tokens",
+      "team": "Client",
+      "milestones": [
+        "scoping",
+        "alpha",
+        "ga"
+      ],
+      "done": 2,
+      "deadlineDays": 26.0,
+      "scale": 0.5
+    },
+    {
+      "name": "Fraud Signals",
+      "team": "Risk",
+      "milestones": [
+        "scoping",
+        "spike",
+        "alpha",
+        "integration",
+        "beta",
+        "ga"
+      ],
+      "done": 2,
+      "deadlineDays": 11.0,
+      "scale": 0.9
+    },
+    {
+      "name": "Audit Trail",
+      "team": "Risk",
+      "milestones": [
+        "scoping",
+        "alpha",
+        "ga"
+      ],
+      "done": 0,
+      "deadlineDays": 19.0,
+      "scale": 0.6
+    }
+  ],
+  "tasks": [
+    {
+      "title": "cache rate limits",
+      "project": "Ledger Core",
+      "owner": "Ada Vane",
+      "size": "S",
+      "state": "active",
+      "progress": 0.62
+    },
+    {
+      "title": "shard the fallback",
+      "project": "Ledger Core",
+      "owner": "Ada Vane",
+      "size": "XL",
+      "state": "active",
+      "progress": 0.38
+    },
+    {
+      "title": "instrument the webhook",
+      "project": "Ledger Core",
+      "owner": "Omar Reyes",
+      "size": "S",
+      "state": "active",
+      "progress": 0.18
+    },
+    {
+      "title": "cache the write path",
+      "project": "Ledger Core",
+      "owner": "Rin Sato",
+      "size": "S",
+      "state": "review",
+      "progress": 0.71
+    },
+    {
+      "title": "benchmark the fallback",
+      "project": "Ledger Core",
+      "owner": "Ada Vane",
+      "size": "M",
+      "state": "done",
+      "progress": 1.0
+    },
+    {
+      "title": "cache the write path",
+      "project": "Ledger Core",
+      "owner": "Ken Lund",
+      "size": "S",
+      "state": "done",
+      "progress": 1.0
+    },
+    {
+      "title": "backfill the webhook",
+      "project": "Event Bus",
+      "owner": "Ken Lund",
+      "size": "M",
+      "state": "active",
+      "progress": 0.09
+    },
+    {
+      "title": "audit the reconciler",
+      "project": "Event Bus",
+      "owner": "Ken Lund",
+      "size": "S",
+      "state": "blocked",
+      "progress": 0.44
+    },
+    {
+      "title": "rewrite p99 latency",
+      "project": "Event Bus",
+      "owner": "Ada Vane",
+      "size": "M",
+      "state": "done",
+      "progress": 1.0
+    },
+    {
+      "title": "stub the write path",
+      "project": "Event Bus",
+      "owner": "Rin Sato",
+      "size": "S",
+      "state": "active",
+      "progress": 0.37
+    },
+    {
+      "title": "cache feature flags",
+      "project": "Event Bus",
+      "owner": "Grace Okoro",
+      "size": "M",
+      "state": "review",
+      "progress": 0.44
+    },
+    {
+      "title": "shard schema drift",
+      "project": "Event Bus",
+      "owner": "Ken Lund",
+      "size": "L",
+      "state": "inbound",
+      "progress": 0.13
+    },
+    {
+      "title": "instrument the fallback",
+      "project": "Event Bus",
+      "owner": "Grace Okoro",
+      "size": "M",
+      "state": "active",
+      "progress": 0.37
+    },
+    {
+      "title": "wire up dead letters",
+      "project": "Event Bus",
+      "owner": "Grace Okoro",
+      "size": "M",
+      "state": "blocked",
+      "progress": 0.74
+    },
+    {
+      "title": "cache retry policy",
+      "project": "Config Vault",
+      "owner": "Grace Okoro",
+      "size": "S",
+      "state": "review",
+      "progress": 0.7
+    },
+    {
+      "title": "migrate rate limits",
+      "project": "Config Vault",
+      "owner": "Ada Vane",
+      "size": "L",
+      "state": "inbound",
+      "progress": 0.42
+    },
+    {
+      "title": "shard session store",
+      "project": "Config Vault",
+      "owner": "Grace Okoro",
+      "size": "M",
+      "state": "blocked",
+      "progress": 0.37
+    },
+    {
+      "title": "instrument the reconciler",
+      "project": "Config Vault",
+      "owner": "Ada Vane",
+      "size": "S",
+      "state": "inbound",
+      "progress": 0.36
+    },
+    {
+      "title": "migrate session store",
+      "project": "Settlement",
+      "owner": "Priya Novak",
+      "size": "M",
+      "state": "active",
+      "progress": 0.43
+    },
+    {
+      "title": "index dead letters",
+      "project": "Settlement",
+      "owner": "Priya Novak",
+      "size": "L",
+      "state": "done",
+      "progress": 1.0
+    },
+    {
+      "title": "benchmark p99 latency",
+      "project": "Settlement",
+      "owner": "Nina Braun",
+      "size": "M",
+      "state": "inbound",
+      "progress": 0.27
+    },
+    {
+      "title": "instrument dead letters",
+      "project": "Settlement",
+      "owner": "Nina Braun",
+      "size": "S",
+      "state": "done",
+      "progress": 1.0
+    },
+    {
+      "title": "harden session store",
+      "project": "Settlement",
+      "owner": "Tomas Kaur",
+      "size": "M",
+      "state": "blocked",
+      "progress": 0.29
+    },
+    {
+      "title": "instrument retry policy",
+      "project": "Settlement",
+      "owner": "Jae Moreau",
+      "size": "M",
+      "state": "inbound",
+      "progress": 0.41
+    },
+    {
+      "title": "index the webhook",
+      "project": "Settlement",
+      "owner": "Priya Novak",
+      "size": "L",
+      "state": "active",
+      "progress": 0.31
+    },
+    {
+      "title": "benchmark the webhook",
+      "project": "Settlement",
+      "owner": "Tomas Kaur",
+      "size": "S",
+      "state": "blocked",
+      "progress": 0.06
+    },
+    {
+      "title": "rewrite rate limits",
+      "project": "Settlement",
+      "owner": "Tomas Kaur",
+      "size": "S",
+      "state": "active",
+      "progress": 0.36
+    },
+    {
+      "title": "backfill schema drift",
+      "project": "Payout Rails",
+      "owner": "Nina Braun",
+      "size": "S",
+      "state": "active",
+      "progress": 0.31
+    },
+    {
+      "title": "stub the fallback",
+      "project": "Payout Rails",
+      "owner": "Priya Novak",
+      "size": "S",
+      "state": "blocked",
+      "progress": 0.52
+    },
+    {
+      "title": "stub rate limits",
+      "project": "Payout Rails",
+      "owner": "Nina Braun",
+      "size": "M",
+      "state": "review",
+      "progress": 0.67
+    },
+    {
+      "title": "deprecate cursor paging",
+      "project": "Payout Rails",
+      "owner": "Jae Moreau",
+      "size": "M",
+      "state": "done",
+      "progress": 1.0
+    },
+    {
+      "title": "cache idempotency keys",
+      "project": "Payout Rails",
+      "owner": "Jae Moreau",
+      "size": "M",
+      "state": "inbound",
+      "progress": 0.3
+    },
+    {
+      "title": "instrument cold start",
+      "project": "Payout Rails",
+      "owner": "Jae Moreau",
+      "size": "S",
+      "state": "active",
+      "progress": 0.08
+    },
+    {
+      "title": "migrate idempotency keys",
+      "project": "Payout Rails",
+      "owner": "Nina Braun",
+      "size": "M",
+      "state": "done",
+      "progress": 1.0
+    },
+    {
+      "title": "audit idempotency keys",
+      "project": "Payout Rails",
+      "owner": "Priya Novak",
+      "size": "M",
+      "state": "active",
+      "progress": 0.02
+    },
+    {
+      "title": "cache retry policy",
+      "project": "Checkout v3",
+      "owner": "Mira Halloran",
+      "size": "M",
+      "state": "done",
+      "progress": 1.0
+    },
+    {
+      "title": "shard dead letters",
+      "project": "Checkout v3",
+      "owner": "Iris Chen",
+      "size": "S",
+      "state": "done",
+      "progress": 1.0
+    },
+    {
+      "title": "throttle dead letters",
+      "project": "Checkout v3",
+      "owner": "Devon Ibarra",
+      "size": "S",
+      "state": "inbound",
+      "progress": 0.06
+    },
+    {
+      "title": "wire up p99 latency",
+      "project": "Checkout v3",
+      "owner": "Mira Halloran",
+      "size": "M",
+      "state": "active",
+      "progress": 0.62
+    },
+    {
+      "title": "audit the write path",
+      "project": "Checkout v3",
+      "owner": "Cyrus Weiss",
+      "size": "M",
+      "state": "active",
+      "progress": 0.27
+    },
+    {
+      "title": "migrate feature flags",
+      "project": "Wallet App",
+      "owner": "Hana Ferris",
+      "size": "S",
+      "state": "review",
+      "progress": 0.73
+    },
+    {
+      "title": "wire up the reconciler",
+      "project": "Wallet App",
+      "owner": "Mira Halloran",
+      "size": "M",
+      "state": "active",
+      "progress": 0.28
+    },
+    {
+      "title": "shard feature flags",
+      "project": "Wallet App",
+      "owner": "Cyrus Weiss",
+      "size": "M",
+      "state": "active",
+      "progress": 0.41
+    },
+    {
+      "title": "shard rate limits",
+      "project": "Wallet App",
+      "owner": "Cyrus Weiss",
+      "size": "M",
+      "state": "review",
+      "progress": 0.61
+    },
+    {
+      "title": "deprecate cold start",
+      "project": "Wallet App",
+      "owner": "Devon Ibarra",
+      "size": "L",
+      "state": "active",
+      "progress": 0.6
+    },
+    {
+      "title": "audit dead letters",
+      "project": "Wallet App",
+      "owner": "Mira Halloran",
+      "size": "L",
+      "state": "active",
+      "progress": 0.02
+    },
+    {
+      "title": "deprecate schema drift",
+      "project": "Wallet App",
+      "owner": "Devon Ibarra",
+      "size": "S",
+      "state": "active",
+      "progress": 0.15
+    },
+    {
+      "title": "shard dead letters",
+      "project": "Wallet App",
+      "owner": "Mira Halloran",
+      "size": "M",
+      "state": "done",
+      "progress": 1.0
+    },
+    {
+      "title": "rewrite idempotency keys",
+      "project": "Wallet App",
+      "owner": "Cyrus Weiss",
+      "size": "M",
+      "state": "active",
+      "progress": 0.15
+    },
+    {
+      "title": "stub the fallback",
+      "project": "Design Tokens",
+      "owner": "Iris Chen",
+      "size": "M",
+      "state": "inbound",
+      "progress": 0.68
+    },
+    {
+      "title": "deprecate rate limits",
+      "project": "Design Tokens",
+      "owner": "Iris Chen",
+      "size": "L",
+      "state": "blocked",
+      "progress": 0.5
+    },
+    {
+      "title": "deprecate session store",
+      "project": "Design Tokens",
+      "owner": "Cyrus Weiss",
+      "size": "M",
+      "state": "inbound",
+      "progress": 0.67
+    },
+    {
+      "title": "deprecate rate limits",
+      "project": "Design Tokens",
+      "owner": "Mira Halloran",
+      "size": "S",
+      "state": "inbound",
+      "progress": 0.6
+    },
+    {
+      "title": "throttle the webhook",
+      "project": "Design Tokens",
+      "owner": "Iris Chen",
+      "size": "L",
+      "state": "inbound",
+      "progress": 0.12
+    },
+    {
+      "title": "harden the fallback",
+      "project": "Fraud Signals",
+      "owner": "Noor Lund",
+      "size": "L",
+      "state": "active",
+      "progress": 0.49
+    },
+    {
+      "title": "index the fallback",
+      "project": "Fraud Signals",
+      "owner": "Noor Lund",
+      "size": "M",
+      "state": "done",
+      "progress": 1.0
+    },
+    {
+      "title": "harden cursor paging",
+      "project": "Fraud Signals",
+      "owner": "Zoe Adeyemi",
+      "size": "S",
+      "state": "blocked",
+      "progress": 0.01
+    },
+    {
+      "title": "instrument cursor paging",
+      "project": "Fraud Signals",
+      "owner": "Zoe Adeyemi",
+      "size": "M",
+      "state": "done",
+      "progress": 1.0
+    },
+    {
+      "title": "index the reconciler",
+      "project": "Fraud Signals",
+      "owner": "Zoe Adeyemi",
+      "size": "S",
+      "state": "active",
+      "progress": 0.19
+    },
+    {
+      "title": "rewrite feature flags",
+      "project": "Audit Trail",
+      "owner": "Ravi Vane",
+      "size": "S",
+      "state": "review",
+      "progress": 0.41
+    },
+    {
+      "title": "migrate session store",
+      "project": "Audit Trail",
+      "owner": "Ravi Vane",
+      "size": "XL",
+      "state": "active",
+      "progress": 0.34
+    },
+    {
+      "title": "index cursor paging",
+      "project": "Audit Trail",
+      "owner": "Noor Lund",
+      "size": "L",
+      "state": "done",
+      "progress": 1.0
+    },
+    {
+      "title": "harden cursor paging",
+      "project": "Audit Trail",
+      "owner": "Zoe Adeyemi",
+      "size": "M",
+      "state": "review",
+      "progress": 0.38
+    },
+    {
+      "title": "deprecate retry policy",
+      "project": "Audit Trail",
+      "owner": "Luca Dubois",
+      "size": "L",
+      "state": "inbound",
+      "progress": 0.6
+    },
+    {
+      "title": "harden dead letters",
+      "project": "Audit Trail",
+      "owner": "Luca Dubois",
+      "size": "M",
+      "state": "active",
+      "progress": 0.05
+    }
+  ],
+  "deps": [
+    {
+      "from": "Ledger Core",
+      "to": "Settlement"
+    },
+    {
+      "from": "Ledger Core",
+      "to": "Payout Rails"
+    },
+    {
+      "from": "Event Bus",
+      "to": "Fraud Signals"
+    },
+    {
+      "from": "Event Bus",
+      "to": "Audit Trail"
+    },
+    {
+      "from": "Config Vault",
+      "to": "Event Bus"
+    },
+    {
+      "from": "Design Tokens",
+      "to": "Checkout v3"
+    },
+    {
+      "from": "Design Tokens",
+      "to": "Wallet App"
+    },
+    {
+      "from": "Settlement",
+      "to": "Checkout v3"
+    },
+    {
+      "from": "Fraud Signals",
+      "to": "Checkout v3"
+    },
+    {
+      "from": "Payout Rails",
+      "to": "Wallet App"
+    }
+  ]
+}

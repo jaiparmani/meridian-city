@@ -43,6 +43,8 @@ class HUD {
     this.chrome(ctx, sim, cam, ui, lod);
     this.detail(ctx, sim, cam, ui, R, dt);
     this.ticker(ctx, sim, cam, ui);
+    this.linkMode(ctx, sim, cam, ui);
+    this.tourCaption(ctx, sim, cam, ui);
     this.incidents(ctx, sim, cam, ui);
     this.firstHint(ctx, sim, cam, ui);
     if (ui.help) this.helpCard(ctx, cam);
@@ -296,7 +298,9 @@ class HUD {
   chrome(ctx, sim, cam, ui, lod) {
     const W = cam.W, H = cam.H, org = sim.org;
     const stats = orgStats(org);
-    const b = easeOut(this.boot);
+    // while the city is touring itself the instruments step back
+    const b = easeOut(this.boot) * (1 - (ui.tour ? ui.tour.fade : 0) * 0.88);
+    if (b < 0.02) return;
 
     /* top-left: identity + clock */
     ctx.save();
@@ -888,8 +892,10 @@ class HUD {
   /* ---- event ticker ------------------------------------- */
   ticker(ctx, sim, cam, ui) {
     const x = 24, y0 = 128;
+    const dim = 1 - (ui.tour ? ui.tour.fade : 0) * 0.9;
+    if (dim < 0.02) return;
     ctx.save();
-    ctx.globalAlpha = easeOut(this.boot) * 0.95;
+    ctx.globalAlpha = easeOut(this.boot) * 0.95 * dim;
     ctx.textAlign = 'left';
     ctx.font = `500 9px ${MONO}`;
     ctx.fillStyle = 'rgba(150,195,220,0.55)';
@@ -911,6 +917,82 @@ class HUD {
         ctx.fillText(n.text.length > 44 ? n.text.slice(0, 43) + '…' : n.text, x + 10, y);
       }
     });
+    ctx.restore();
+  }
+
+  /* armed to lay a road: a line follows the cursor */
+  linkMode(ctx, sim, cam, ui) {
+    if (!sim.linkFrom) return;
+    const b = sim.city.byProject[sim.linkFrom];
+    if (!b) return;
+    const p = cam.proj(b.x, b.y, buildingHeight(b) * 0.6, {});
+    const m = ui.mouse || { x: cam.W / 2, y: cam.H / 2 };
+    const puls = 0.6 + 0.4 * Math.sin(sim.time * 5);
+    ctx.save();
+    ctx.setLineDash([7, 6]);
+    ctx.lineDashOffset = -(sim.time * 30) % 13;
+    ctx.strokeStyle = `rgba(255,190,70,${0.55 + puls * 0.4})`;
+    ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(m.x, m.y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, TAU);
+    ctx.fillStyle = 'rgba(255,190,70,0.95)'; ctx.fill();
+    ctx.beginPath(); ctx.arc(m.x, m.y, 9 + puls * 3, 0, TAU);
+    ctx.strokeStyle = `rgba(255,190,70,${0.5 + puls * 0.4})`;
+    ctx.lineWidth = 1.4; ctx.stroke();
+
+    const label = 'PICK THE STRUCTURE IT WAITS ON  ·  ESC TO CANCEL';
+    ctx.textAlign = 'center';
+    ctx.font = `600 10px ${MONO}`;
+    const w = ctx.measureText(label).width + 26;
+    const bx = clamp(m.x, w / 2 + 10, cam.W - w / 2 - 10), by = m.y + 30;
+    ctx.fillStyle = 'rgba(8,18,26,0.92)';
+    roundRectPath(ctx, bx - w / 2, by - 10, w, 20, 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,190,70,0.4)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = '#ffd280';
+    ctx.fillText(label, bx, by);
+    ctx.restore();
+  }
+
+  /* the city narrating itself while nobody is driving */
+  tourCaption(ctx, sim, cam, ui) {
+    const t = ui.tour;
+    if (!t || t.fade < 0.02) return;
+    const a = easeOut(t.fade);
+    const W = cam.W, H = cam.H;
+    ctx.save();
+    ctx.globalAlpha = a;
+    // a letterbox to say plainly that this is not you driving
+    const bar = 46 * a;
+    ctx.fillStyle = 'rgba(2,7,12,0.96)';
+    ctx.fillRect(0, 0, W, bar);
+    ctx.fillRect(0, H - bar, W, bar);
+    ctx.strokeStyle = 'rgba(127,233,255,0.22)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, bar + 0.5); ctx.lineTo(W, bar + 0.5);
+    ctx.moveTo(0, H - bar - 0.5); ctx.lineTo(W, H - bar - 0.5);
+    ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.font = `700 17px ${MONO}`;
+    ctx.fillStyle = '#eaf8ff';
+    ctx.fillText(t.caption || '', W / 2, H - bar * 0.62);
+    ctx.font = `500 10px ${MONO}`;
+    ctx.fillStyle = 'rgba(170,210,232,0.85)';
+    ctx.fillText(t.sub || '', W / 2, H - bar * 0.28);
+
+    ctx.textAlign = 'left';
+    ctx.font = `600 9px ${MONO}`;
+    ctx.fillStyle = CY;
+    const dot = 0.5 + 0.5 * Math.sin(sim.time * 3);
+    ctx.globalAlpha = a * (0.5 + dot * 0.5);
+    ctx.fillText('◉ TOURING', 24, bar * 0.5);
+    ctx.globalAlpha = a;
+    ctx.textAlign = 'right';
+    ctx.fillStyle = 'rgba(160,200,225,0.7)';
+    ctx.fillText('MOVE THE MOUSE TO TAKE OVER', W - 24, bar * 0.5);
     ctx.restore();
   }
 

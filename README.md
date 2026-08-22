@@ -6,6 +6,7 @@ no list — the work *is* the city, and you navigate it by moving through space.
 **→ [Open the city](https://jaiparmani.github.io/meridian-city/)**
 
 No build, no server, no dependencies. Clone it and open `index.html`.
+Press `I` to load your own work into it.
 
 ![The whole organisation](docs/organisation.jpg)
 
@@ -70,6 +71,8 @@ a toolbar. Every command has a physical consequence you can watch happen.
 | `✦ FOCUS` | prioritise it — work moves faster here, and windows start lighting |
 | `≡ WIP` | cap work in progress — the excess is sent back to the kerb (see below) |
 | `⚠ RESPOND` | answer an incident and bring the structure back up |
+| `⇉ LINK` | build a road: pick what this structure waits on |
+| `✂ CUT` | demolish a road into it, releasing whatever was waiting |
 
 **On a task**
 
@@ -137,6 +140,81 @@ Let it fall below a third and people start **leaving**: cars pull out of the
 neighbourhood, drive to a coast gate and don't come back. The streets get
 quieter, and they stay that way.
 
+## Load your own work
+
+Press `I`. The demo organisation is a stand-in — the city will build itself out
+of something real.
+
+![Loading a city](docs/loader.jpg)
+
+**Drop a `.json` file** anywhere on the page, in a format written for humans:
+
+```json
+{
+  "name": "NORTHWIND",
+  "teams":    [{ "name": "Platform", "hue": 196, "people": ["Ada Vane"] }],
+  "projects": [{ "name": "Ledger Core", "team": "Platform",
+                 "milestones": ["scoping","alpha","ga"], "done": 1,
+                 "deadlineDays": 6.5 }],
+  "tasks":    [{ "title": "shard the write path", "project": "Ledger Core",
+                 "size": "L", "state": "blocked" }],
+  "deps":     [{ "from": "Ledger Core", "to": "Settlement" }]
+}
+```
+
+Only `projects` is required; teams, people and tasks are invented where you
+leave them out, and a city with too few roads gets some so the neighbourhoods
+are actually connected. States are `inbound · queued · active · blocked ·
+review · done`; sizes are `S · M · L · XL` and become the vehicle's mass.
+
+There is a worked example in [`samples/northwind.json`](samples/northwind.json)
+— ten structures, four neighbourhoods, real dependencies. **LOAD THE SAMPLE**
+builds it in one click.
+
+![A city built from the sample file](docs/sample.jpg)
+
+**Or point it at a public GitHub repository.** Milestones become structures,
+labels become neighbourhoods, issues become the traffic, open PRs become work
+out for review, and `blocked by #123` in an issue body becomes a road between
+two buildings. If a repo has no milestones it falls back to building structures
+out of its busiest labels.
+
+> **Note:** the GitHub path is written and error-handled but I could not verify
+> it end to end — the sandbox this was built in blocks outbound calls to
+> `api.github.com`. The JSON path is fully tested. If GitHub fails for you the
+> status line will say so rather than failing silently.
+
+## Building roads
+
+`⇉ LINK` on a structure arms it; click a second structure and a dependency is
+created between them. The road is then physically **laid, section by section** —
+a survey line runs ahead of the paving, dust rings out at each junction as the
+tarmac reaches it, and traffic starts using it the moment it connects.
+
+![Arming a new dependency road](docs/link.jpg)
+
+`✂ CUT` demolishes a road into a structure and releases anything that was
+waiting on it.
+
+## When you walk away
+
+Leave it alone for twenty seconds and the city starts showing itself: the
+camera flies between whatever is most interesting right now — the worst jam, a
+structure that is down, a queue at the kerb, a neighbourhood under load — and
+names what you are looking at. The instruments fade back and it goes letterboxed.
+
+![The city touring itself](docs/tour.jpg)
+
+Move the mouse and you have control back instantly.
+
+## It remembers
+
+The city saves itself to `localStorage` every few seconds and restores on
+reload — your WIP caps, morale, shipped count, the roads you built, the day it
+had reached. **EXPORT THIS CITY** hands you the whole thing as a `.json` file
+in the same format the importer reads, so saving, loading and sharing are all
+one code path. **FORGET SAVE** wipes it.
+
 ## Physics, not state changes
 
 Nothing pops into existence.
@@ -166,6 +244,7 @@ Nothing pops into existence.
 | `1`–`5` | jump to an altitude |
 | `space` | hold time |
 | `[` `]` | close / open the intake valve |
+| `I` | load real work into the city |
 | `H` | the legend |
 | `R` | reset rotation |
 
@@ -187,6 +266,9 @@ js/data.js      the organisation, and the event rates that drive it
 js/city.js      island, neighbourhoods, road graph, plots, dependency routing
 js/sim.js       agents, car-following, congestion spread, weather, effects
 js/actions.js   the commands, and what each one does to the city
+js/import.js    the file format, GitHub ingestion, and serialising back out
+js/persist.js   saving to localStorage and exporting a city as a file
+js/tour.js      what the city does when nobody is driving
 js/render.js    camera and renderer
 js/hud.js       instrumentation, tracking labels, readouts, command ring
 js/main.js      boot, input, picking, navigation

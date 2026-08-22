@@ -9,12 +9,59 @@
 <body>
 <canvas id="city"></canvas>
 <div id="frame"></div>
+
+<div id="loader" hidden>
+  <div class="panel">
+    <h1>LOAD A CITY</h1>
+    <p class="sub">Build the streets out of real work instead of a simulated company.</p>
+
+    <label class="row">
+      <span>GITHUB</span>
+      <input id="repo" type="text" spellcheck="false" placeholder="owner/repo   ·   e.g. facebook/react">
+      <button id="build">BUILD</button>
+    </label>
+    <p class="note">Milestones become structures, labels become neighbourhoods, issues
+      become the traffic, and “blocked by #123” becomes a road. Public repos only.</p>
+
+    <div class="or"><span>OR DROP A .JSON FILE ANYWHERE</span></div>
+
+    <details>
+      <summary>the file format</summary>
+<pre>{
+  "name": "ACME",
+  "teams":    [{ "name": "Platform", "hue": 196, "people": ["Ada Vane"] }],
+  "projects": [{ "name": "Edge Router", "team": "Platform",
+                 "milestones": ["scoping","alpha","ga"], "done": 1,
+                 "deadlineDays": 12 }],
+  "tasks":    [{ "title": "fix the retry path", "project": "Edge Router",
+                 "size": "M", "state": "active", "progress": 0.3 }],
+  "deps":     [{ "from": "Edge Router", "to": "Auth Mesh" }]
+}</pre>
+      <p class="note">Only <code>projects</code> is required; the rest is inferred.
+        States: inbound · queued · active · blocked · review · done.</p>
+    </details>
+
+    <p id="status"></p>
+    <div class="actions">
+      <button id="sample" class="ghost">LOAD THE SAMPLE</button>
+      <button id="demo" class="ghost">NEW DEMO CITY</button>
+      <button id="export" class="ghost">EXPORT THIS CITY</button>
+      <button id="forget" class="ghost">FORGET SAVE</button>
+      <button id="close" class="ghost">CLOSE · I</button>
+    </div>
+  </div>
+</div>
+
+<div id="dropveil" hidden><span>RELEASE TO BUILD THE CITY</span></div>
 <noscript><div id="noscript">THIS SURFACE REQUIRES JAVASCRIPT</div></noscript>
 <script src="js/util.js"></script>
 <script src="js/data.js"></script>
 <script src="js/city.js"></script>
 <script src="js/sim.js"></script>
 <script src="js/actions.js"></script>
+<script src="js/import.js"></script>
+<script src="js/persist.js"></script>
+<script src="js/tour.js"></script>
 <script src="js/render.js"></script>
 <script src="js/hud.js"></script>
 <script src="js/main.js"></script>

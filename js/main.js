@@ -4,9 +4,10 @@
 'use strict';
 
 const canvas = document.getElementById('city');
-const org = buildOrg();
-const city = buildCity(org);
-const sim = new Sim(org, city);
+/* these are rebindable: the city can be torn down and rebuilt from new data */
+let org = buildOrg();
+let city = buildCity(org);
+let sim = new Sim(org, city);
 sim.city = city;
 const cam = new Camera();
 const R = new Renderer(canvas);
@@ -19,10 +20,38 @@ const ui = {
 };
 
 /* structures rise out of the ground on a wave from downtown */
-city.buildings.forEach((b) => {
-  b.delay = 0.55 + dist(b.x, b.y, 0, 0) / 620 * 1.5 + rnd() * 0.35;
-  b.floors = 0.02;
-});
+function seedGrowth(c) {
+  c.buildings.forEach((b) => {
+    b.delay = 0.55 + dist(b.x, b.y, 0, 0) / 620 * 1.5 + rnd() * 0.35;
+    b.floors = 0.02;
+  });
+}
+seedGrowth(city);
+
+/* tear the city down and raise a new one from a different organisation */
+function rebuildFrom(newOrg, label) {
+  org = newOrg;
+  city = buildCity(org);
+  sim = new Sim(org, city);
+  sim.city = city;
+  seedGrowth(city);
+  ui.selected = null; ui.hover = null; ui.focusTeam = null;
+  ui.hotDeps = null; ui.ringHover = -1; ui.linkFrom = null;
+  hud.labels.clear();
+  hud.ringNodes = [];
+  hud.panelBox = null;
+  hud.panelT = 0;
+  hud.boot = 0;
+  hud.hintDone = true;
+  cam.follow = null;
+  cam.s = 0.18; cam.ts = 0.95;
+  cam.x = cam.tx = 0; cam.y = cam.ty = 30;
+  cam.radiusHint = city.radius * 1.6;
+  tour.stop();
+  Object.assign(window.APP, { org, city, sim });
+  if (label) sim.say(label, 190, true);
+  return { projects: org.projects.length, tasks: org.tasks.length, teams: org.teams.length };
+}
 const _stepBuildings = Sim.prototype.stepBuildings;
 Sim.prototype.stepBuildings = function (dt) {
   for (const b of this.city.buildings) {
@@ -73,6 +102,7 @@ function setIntakeFrom(mx) {
 }
 
 canvas.addEventListener('mousedown', (e) => {
+  tour.poke();
   if (inIntake(e.clientX, e.clientY)) {
     drag = { intake: true };
     setIntakeFrom(e.clientX);
@@ -84,7 +114,9 @@ canvas.addEventListener('mousedown', (e) => {
   canvas.style.cursor = 'grabbing';
 });
 window.addEventListener('mousemove', (e) => {
+  if (Math.abs(e.clientX - lastMouse.x) + Math.abs(e.clientY - lastMouse.y) > 3) tour.poke();
   lastMouse.x = e.clientX; lastMouse.y = e.clientY;
+  ui.mouse = lastMouse;
   if (drag && drag.intake) { setIntakeFrom(e.clientX); return; }
   if (drag) {
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
@@ -132,6 +164,7 @@ canvas.addEventListener('dblclick', (e) => {
 
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
+  tour.poke();
   const k = Math.exp(-e.deltaY * 0.0016);
   cam.ts = clamp(cam.ts * k, 0.22, 34);
   // keep the original anchor while the cursor stays put, so repeated
@@ -145,6 +178,7 @@ canvas.addEventListener('wheel', (e) => {
 /* touch: one finger orbits, two fingers zoom */
 let touch = null;
 canvas.addEventListener('touchstart', (e) => {
+  tour.poke();
   if (e.touches.length === 1) touch = { x: e.touches[0].clientX, y: e.touches[0].clientY, d: 0 };
   else if (e.touches.length === 2) {
     const [a, b] = e.touches;
@@ -172,7 +206,14 @@ canvas.addEventListener('touchend', () => { touch = null; });
 
 window.addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
-  if (k === 'escape') ascend();
+  tour.poke();
+  if (ui.loader && k !== 'escape' && k !== 'i') return;
+  if (k === 'i') { openLoader(); return; }
+  if (k === 'escape') {
+    if (ui.loader) { openLoader(false); return; }
+    if (sim.linkFrom) { sim.linkFrom = null; sim.say('road cancelled', 200, true); return; }
+    ascend();
+  }
   else if (k === 'h') ui.help = !ui.help;
   else if (k === ' ') { e.preventDefault(); ui.paused = !ui.paused; }
   else if (k === 'q') cam.tyaw += 0.22;
@@ -238,6 +279,19 @@ function click(mx, my, wasRot) {
     return;
   }
   const hit = pickAt(mx, my);
+  // armed to build a road: this click picks the other end
+  if (sim.linkFrom) {
+    const from = sim.linkFrom;
+    sim.linkFrom = null;
+    if (hit && hit.type === 'project') {
+      const res = sim.buildDependency(hit.id, from);
+      if (!res.ok) sim.say(`cannot build that road · ${res.why}`, 20, true);
+      else cam.shake = Math.max(cam.shake, 0.16);
+    } else {
+      sim.say('road cancelled', 200, true);
+    }
+    return;
+  }
   if (!hit) { select(null); return; }
   select(hit);
   if (hit.type === 'team' && lodOf(cam.s) <= LOD.TEAM) flyTo(hit.obj.cx, hit.obj.cy, 1.85);
@@ -353,6 +407,109 @@ function toggleFollow() {
   }
 }
 
+/* ---------- loading a real city -------------------------- */
+const loaderEl = document.getElementById('loader');
+const dropVeil = document.getElementById('dropveil');
+const statusEl = document.getElementById('status');
+const repoEl = document.getElementById('repo');
+
+function say(msg, kind) {
+  statusEl.textContent = msg || '';
+  statusEl.className = kind || '';
+}
+function openLoader(open) {
+  const show = open === undefined ? loaderEl.hidden : open;
+  loaderEl.hidden = !show;
+  ui.loader = show;
+  if (show) { say(''); setTimeout(() => repoEl.focus(), 30); }
+}
+function adopt(newOrg, label) {
+  persist.resume();
+  const info = rebuildFrom(newOrg, label);
+  persist.save(newOrg);
+  say(`built ${info.projects} structures · ${info.tasks} tasks · ${info.teams} neighbourhoods`, 'ok');
+  setTimeout(() => openLoader(false), 900);
+}
+
+document.getElementById('close').onclick = () => openLoader(false);
+document.getElementById('demo').onclick = () => {
+  adopt(buildOrg(), 'demo city rebuilt');
+};
+document.getElementById('sample').onclick = async () => {
+  say('reading samples/northwind.json…');
+  try {
+    const res = await fetch('samples/northwind.json');
+    if (!res.ok) throw new Error('sample not found (' + res.status + ')');
+    adopt(orgFromSpec(await res.json()), 'northwind · sample city built');
+  } catch (e) {
+    say(location.protocol === 'file:'
+      ? 'browsers block file reads from file:// — run a local server, or drag the file in instead'
+      : String(e.message || e), 'err');
+  }
+};
+document.getElementById('build').onclick = async () => {
+  const path = repoEl.value.trim();
+  if (!path) { say('type owner/repo first', 'err'); return; }
+  say('contacting github…');
+  try {
+    const newOrg = await orgFromGitHub(path, (m) => say(m));
+    adopt(newOrg, `${path} · city built from live issues`);
+  } catch (e) {
+    const msg = String(e.message || e);
+    say(/failed to fetch|networkerror/i.test(msg)
+      ? 'could not reach github — check the network, or a proxy may be blocking api.github.com'
+      : msg, 'err');
+  }
+};
+repoEl.addEventListener('keydown', (e) => {
+  e.stopPropagation();
+  if (e.key === 'Enter') document.getElementById('build').click();
+});
+
+/* drop a file anywhere on the page */
+let dragDepth = 0;
+window.addEventListener('dragenter', (e) => {
+  e.preventDefault(); dragDepth++; dropVeil.hidden = false;
+});
+window.addEventListener('dragover', (e) => e.preventDefault());
+window.addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; dropVeil.hidden = true; } });
+window.addEventListener('drop', async (e) => {
+  e.preventDefault();
+  dragDepth = 0; dropVeil.hidden = true;
+  const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (!file) return;
+  openLoader(true);
+  say(`reading ${file.name}…`);
+  try {
+    const spec = JSON.parse(await file.text());
+    adopt(orgFromSpec(spec), `${file.name} · city built`);
+  } catch (err) {
+    say(`${file.name}: ${err.message || err}`, 'err');
+  }
+});
+
+document.getElementById('export').onclick = () => {
+  try { say(`saved ${downloadCity(org)}`, 'ok'); }
+  catch (e) { say(String(e.message || e), 'err'); }
+};
+document.getElementById('forget').onclick = () => {
+  persist.clear();
+  say('saved city cleared — reload for a fresh city', 'ok');
+};
+
+/* pick up wherever we left off */
+(function restore() {
+  const spec = persist.load();
+  if (!spec) return;
+  try {
+    rebuildFrom(orgFromSpec(spec), `restored · saved ${persist.age(spec) || 'earlier'}`);
+    hud.boot = 0;
+  } catch (e) {
+    persist.clear();
+  }
+})();
+window.addEventListener('beforeunload', () => persist.save(org));
+
 /* ---------- loop ----------------------------------------- */
 let last = performance.now();
 let fpsAcc = 0, fpsN = 0, fps = 60;
@@ -378,6 +535,9 @@ function frame(now) {
   // lightning rattles the camera
   if (sim.weather.flash > 0.9) cam.shake = Math.max(cam.shake, 0.35 * sim.weather.storm);
 
+  persist.tick(dt, org);
+  tour.update(dt, sim, city, org, ui);
+  ui.tour = tour;
   ui.level = lodOf(cam.s);
   R.draw(sim, cam, ui, dt);
   hud.draw(R.ctx, sim, cam, ui, R, dt);
@@ -391,4 +551,5 @@ setTimeout(() => { cam.ts = 0.95; }, 300);
 
 /* expose the running city for inspection / automation */
 window.APP = { org, city, sim, cam, ui, hud, R, flyTo, gotoLevel, select, pickAt, ringAt,
+  rebuildFrom, tour,
   get fps() { return fps; } };

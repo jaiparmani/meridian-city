@@ -115,6 +115,28 @@ const ACTIONS = [
     },
   },
 
+  {
+    id: 'link', scope: 'project', glyph: '⇉', label: 'LINK',
+    hint: 'build a road — pick what this one waits on',
+    cool: 3,
+    enabled: (sim, p) => sim.org.projects.length > 1,
+    run: (sim, p) => {
+      // arming only; the second click picks the other end
+      sim.linkFrom = p.id;
+      sim.say(`${p.name} · pick a structure to depend on`, 190, true);
+    },
+  },
+  {
+    id: 'cut', scope: 'project', glyph: '✂', label: 'CUT',
+    hint: 'demolish a road into this structure',
+    cool: 5,
+    enabled: (sim, p) => sim.org.deps.some((d) => d.to === p.id),
+    run: (sim, p) => {
+      const dep = sim.org.deps.filter((d) => d.to === p.id).pop();
+      if (dep) sim.cutDependency(dep.id);
+    },
+  },
+
   /* ---------- tasks (the things in motion) --------------- */
   {
     id: 'clear', scope: 'task', glyph: '⊘', label: 'CLEAR',

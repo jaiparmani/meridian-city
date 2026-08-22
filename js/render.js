@@ -394,10 +394,33 @@ class Renderer {
     for (const [e, x0, y0, x1, y1] of road) {
       if (!e.deps.length) continue;
       const hue = e.hue;
+      const bt = e.build === undefined ? 1 : e.build;
       const focus = ui.hotDeps && e.deps.some((d) => ui.hotDeps.has(d));
       ctx.lineWidth = Math.max(0.7, e.w * s * 0.30);
-      ctx.strokeStyle = hsl(hue, 85, 60, ((focus ? 0.45 : 0.10) + e.pulse * 0.12) * clamp(remap(s, 8, 16, 1, 0.25)));
-      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+      ctx.strokeStyle = hsl(hue, 85, 60, ((focus ? 0.45 : 0.10) + e.pulse * 0.12) * clamp(remap(s, 8, 16, 1, 0.25)) * bt);
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1 * bt + x0 * (1 - bt), y1 * bt + y0 * (1 - bt)); ctx.stroke();
+      // still being laid: survey line ahead of the paving
+      if (bt < 1) {
+        ctx.save();
+        ctx.lineCap = 'butt';
+        ctx.setLineDash([3 * s, 4 * s]);
+        ctx.lineDashOffset = -(sim.time * 30) % (7 * s);
+        ctx.lineWidth = Math.max(0.8, e.w * s * 0.22);
+        ctx.strokeStyle = `rgba(255,190,70,${0.55 + 0.35 * Math.sin(sim.time * 6)})`;
+        ctx.beginPath();
+        ctx.moveTo(lerp(x0, x1, bt), lerp(y0, y1, bt));
+        ctx.lineTo(x1, y1);
+        ctx.stroke();
+        ctx.restore();
+        // the paving head
+        const hx = lerp(x0, x1, bt), hy = lerp(y0, y1, bt);
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const gr = clamp(9 * s, 5, 40);
+        ctx.globalAlpha = 0.8;
+        ctx.drawImage(this.glow, hx - gr, hy - gr, gr * 2, gr * 2);
+        ctx.restore();
+      }
       const mapAlpha = clamp(remap(s, 7, 15, 1, 0.12));
       if (detail && mapAlpha > 0.02) {
         const dash = 4.5 * s, gap = 11 * s;
@@ -411,6 +434,19 @@ class Renderer {
         ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
         ctx.restore();
       }
+    }
+    ctx.restore();
+
+    // roads being demolished
+    ctx.save();
+    for (const [e, x0, y0, x1, y1] of road) {
+      if (!e.demolish) continue;
+      const d = clamp(e.demolish);
+      ctx.setLineDash([4 * s, 4 * s]);
+      ctx.lineDashOffset = (sim.time * 20) % (8 * s);
+      ctx.lineWidth = Math.max(1, e.w * s * 0.4);
+      ctx.strokeStyle = `rgba(255,140,60,${d * 0.5})`;
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
     }
     ctx.restore();
 

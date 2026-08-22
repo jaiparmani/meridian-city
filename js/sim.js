@@ -211,6 +211,102 @@ class Sim {
     });
   }
 
+  /* ---------- roads you build yourself -------------------- */
+  buildDependency(fromId, toId) {
+    const org = this.org, city = this.city;
+    if (fromId === toId) return { ok: false, why: 'a structure cannot depend on itself' };
+    if (org.deps.some((d) => d.from === fromId && d.to === toId)) {
+      return { ok: false, why: 'that road already exists' };
+    }
+    if (org.deps.some((d) => d.from === toId && d.to === fromId)) {
+      return { ok: false, why: 'that would loop back on itself' };
+    }
+    const A = city.byProject[fromId], B = city.byProject[toId];
+    if (!A || !B) return { ok: false, why: 'no such structure' };
+    const path = routeNodes(city, A.driveNode, B.driveNode);
+    if (!path || path.length < 2) return { ok: false, why: 'no route between them' };
+
+    const dep = {
+      id: uid('D'), from: fromId, to: toId, weight: 1,
+      path, edges: pathEdges(city, path),
+      hue: org.teams[org.byId[toId].team].hue,
+      buildT: 0, madeByHand: true,
+    };
+    org.deps.push(dep);
+    dep.edges.forEach((ei) => {
+      const e = city.edges[ei];
+      e.deps.push(dep.id);
+      e.hue = dep.hue;
+      if (e.build === undefined) e.build = 1;
+      if (e.kind === 'street') { e.kind = 'arterial'; e.w = 9; }
+    });
+    // the new stretch starts unpaved and gets laid a section at a time
+    dep.edges.forEach((ei) => { city.edges[ei].build = 0; });
+    this.building = this.building || [];
+    this.building.push(dep);
+    this.say(`${org.byId[toId].name} now depends on ${org.byId[fromId].name}`, dep.hue, true);
+    return { ok: true, dep };
+  }
+
+  cutDependency(depId) {
+    const org = this.org, city = this.city;
+    const i = org.deps.findIndex((d) => d.id === depId);
+    if (i < 0) return { ok: false, why: 'no such road' };
+    const dep = org.deps[i];
+    org.deps.splice(i, 1);
+    (dep.edges || []).forEach((ei) => {
+      const e = city.edges[ei];
+      e.deps = e.deps.filter((id) => id !== dep.id);
+      e.demolish = 1;
+      if (!e.deps.length && e.kind === 'arterial') { e.kind = 'street'; e.w = ROAD_W.street; }
+    });
+    // anything waiting on that road is released
+    let freed = 0;
+    org.tasks.forEach((t) => {
+      if (t.state === ST.BLOCKED && t.blockedBy === dep.from && t.project === dep.to) {
+        queueEvent(org, { type: 'unblock', task: t.id });
+        freed++;
+      }
+    });
+    const B = city.byProject[dep.to];
+    if (B) this.ring(B.x, B.y, 0, Math.max(B.w, B.d) * 2.4, 20, 1);
+    this.say(`road cut · ${org.byId[dep.to] ? org.byId[dep.to].name : '?'} released${freed ? ` — ${freed} unblocked` : ''}`, 20, true);
+    return { ok: true, freed };
+  }
+
+  stepConstruction(dt) {
+    const city = this.city;
+    if (this.building && this.building.length) {
+      for (const dep of this.building) {
+        const n = dep.edges.length || 1;
+        const was = dep.buildT;
+        dep.buildT = Math.min(1, dep.buildT + dt / (1.2 + n * 0.28));
+        dep.edges.forEach((ei, i) => {
+          city.edges[ei].build = clamp(dep.buildT * n - i);
+        });
+        // a puff of dust at each junction as the paving reaches it
+        const reached = Math.floor(dep.buildT * n), before = Math.floor(was * n);
+        if (reached > before && dep.path[reached]) {
+          const nd = city.nodes[dep.path[reached]];
+          this.ring(nd.x, nd.y, 0, 26, dep.hue, 0.5);
+          for (let k = 0; k < 6; k++) {
+            const a2 = rnd() * TAU, sp = rr(3, 12);
+            this.fx.push({
+              type: 'dust', x: nd.x, y: nd.y, z: 0,
+              vx: Math.cos(a2) * sp, vy: Math.sin(a2) * sp, vz: rr(3, 9),
+              life: 0, max: rr(0.7, 1.6), r: rr(2, 5), hue: dep.hue,
+            });
+          }
+        }
+        if (dep.buildT >= 1) dep.done = true;
+      }
+      this.building = this.building.filter((d) => !d.done);
+    }
+    for (const e of city.edges) {
+      if (e.demolish > 0) e.demolish = Math.max(0, e.demolish - dt * 0.6);
+    }
+  }
+
   /* ---------- incidents ---------------------------------- */
   startIncident(p) {
     const org = this.org, city = this.city;
@@ -366,6 +462,7 @@ class Sim {
     this.applyEvents(stepOrg(org, dt, this));
     this.traffic(dt);
     this.releaseQueues(dt);
+    this.stepConstruction(dt);
     this.stepIncidents(dt);
     this.stepAgents(dt);
     this.stepBuildings(dt);
