@@ -62,7 +62,22 @@ cam.radiusHint = city.radius * 1.6;
 /* ---------- input ---------------------------------------- */
 let drag = null, zoomAnchor = null, lastMouse = { x: 0, y: 0 }, moved = 0;
 
+function inIntake(mx, my) {
+  const b = hud.intakeBox;
+  return b && mx >= b[0] && mx <= b[0] + b[2] && my >= b[1] && my <= b[1] + b[3];
+}
+function setIntakeFrom(mx) {
+  const b = hud.intakeBox;
+  if (!b) return;
+  org.intake = clamp((mx - (b[0] + 6)) / (b[2] - 12), 0, 1) * 2;
+}
+
 canvas.addEventListener('mousedown', (e) => {
+  if (inIntake(e.clientX, e.clientY)) {
+    drag = { intake: true };
+    setIntakeFrom(e.clientX);
+    return;
+  }
   drag = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, rot: e.shiftKey || e.button === 2, t: performance.now() };
   moved = 0;
   zoomAnchor = null;
@@ -70,6 +85,7 @@ canvas.addEventListener('mousedown', (e) => {
 });
 window.addEventListener('mousemove', (e) => {
   lastMouse.x = e.clientX; lastMouse.y = e.clientY;
+  if (drag && drag.intake) { setIntakeFrom(e.clientX); return; }
   if (drag) {
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
     moved += Math.abs(dx) + Math.abs(dy);
@@ -86,6 +102,11 @@ window.addEventListener('mousemove', (e) => {
     }
     drag.x = e.clientX; drag.y = e.clientY;
   } else {
+    if (inIntake(e.clientX, e.clientY)) {
+      ui.hover = null; ui.ringHover = -1;
+      canvas.style.cursor = 'ew-resize';
+      return;
+    }
     const node = ringAt(e.clientX, e.clientY);
     ui.ringHover = node ? node.index : -1;
     if (node) { ui.hover = null; canvas.style.cursor = node.ok ? 'pointer' : 'not-allowed'; return; }
@@ -94,6 +115,7 @@ window.addEventListener('mousemove', (e) => {
   }
 });
 window.addEventListener('mouseup', (e) => {
+  if (drag && drag.intake) { drag = null; return; }
   if (drag) {
     if (moved < 5) click(e.clientX, e.clientY, drag.rot);
     else { // throw the camera a little
@@ -158,6 +180,8 @@ window.addEventListener('keydown', (e) => {
   else if (k === 'f') toggleFollow();
   else if (k === 'r') { cam.tyaw = -0.52; }
   else if (k >= '1' && k <= '5') gotoLevel(+k - 1);
+  else if (k === '[') org.intake = clamp(org.intake - 0.2, 0, 2);
+  else if (k === ']') org.intake = clamp(org.intake + 0.2, 0, 2);
   else if (k === '+' || k === '=') cam.ts = clamp(cam.ts * 1.35, 0.22, 34);
   else if (k === '-') cam.ts = clamp(cam.ts / 1.35, 0.22, 34);
 });

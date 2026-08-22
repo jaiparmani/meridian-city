@@ -69,6 +69,52 @@ const ACTIONS = [
     },
   },
 
+  {
+    id: 'wip', scope: 'project', glyph: '≡', label: 'WIP',
+    hint: 'cap work in progress — the rest waits at the kerb',
+    cool: 2,
+    enabled: () => true,
+    run: (sim, p) => {
+      const steps = [0, 6, 4, 2];
+      p.wip = steps[(steps.indexOf(p.wip) + 1) % steps.length];
+      const b = sim.city.byProject[p.id];
+      let pushed = 0;
+      if (p.wip > 0) {
+        // stop starting, start finishing: the excess is sent back to the kerb,
+        // least-finished first, so the cap does something you can see at once
+        const active = p.tasks.map((id) => sim.org.byId[id])
+          .filter((t) => t && t.state === ST.ACTIVE)
+          .sort((x, y) => x.done - y.done);
+        const excess = Math.max(0, active.length - p.wip);
+        for (let i = 0; i < excess; i++) {
+          const t = active[i];
+          t.state = ST.QUEUED;
+          t.queuedAt = sim.org.day;
+          t.log.push({ day: sim.org.day, text: 'sent back to the queue' });
+          const a2 = sim.byTask[t.id];
+          if (a2) sim.sendHome(a2, 'toBuilding');
+          pushed++;
+        }
+      }
+      recomputeProject(p, sim.org);
+      sim.ring(b.x, b.y, 0, Math.max(b.w, b.d) * 2, p.wip ? 46 : 190, 0.6);
+      sim.say(p.wip
+        ? `${p.name} · WIP capped at ${p.wip}${pushed ? ` — ${pushed} sent back` : ''}`
+        : `${p.name} · WIP uncapped`, 46, true);
+    },
+  },
+  {
+    id: 'respond', scope: 'project', glyph: '⚠', label: 'RESPOND',
+    hint: 'answer the incident — bring it back up',
+    cool: 2,
+    enabled: (sim, p) => !!p.incident,
+    run: (sim, p) => {
+      const inc = sim.org.incidents.find((i) => i.project === p.id);
+      if (inc) sim.endIncident(inc, true);
+      sim.org.teams[p.team].morale = clamp(sim.org.teams[p.team].morale + 0.06, 0.05, 1);
+    },
+  },
+
   /* ---------- tasks (the things in motion) --------------- */
   {
     id: 'clear', scope: 'task', glyph: '⊘', label: 'CLEAR',
@@ -152,6 +198,7 @@ const ACTIONS = [
       const p = routeNodes(sim.city, gate, d.gate);
       if (p) sim.setPath(a, p);
       team.projects.forEach((id) => recomputeProject(sim.org.byId[id], sim.org));
+      team.morale = clamp(team.morale + 0.09, 0.05, 1);
       sim.ring(d.cx, d.cy, 0, 120, team.hue, 0.8);
       sim.say(`${team.name} · ${person.name} joined`, team.hue, true);
     },
@@ -191,11 +238,33 @@ const ACTIONS = [
       });
       const d = sim.city.districts[team.id];
       d.pressure = Math.min(1.3, d.pressure + 0.25);
+      // this is borrowed, not free
+      team.morale = clamp(team.morale - 0.22, 0.05, 1);
       sim.ring(d.cx, d.cy, 0, Math.max(d.W, d.D) * 1.2, 30, 1.4);
-      sim.say(`${team.name} · crunch`, 30, true);
+      sim.say(`${team.name} · crunch — morale ${(team.morale * 100) | 0}%`, 30, true);
     },
   },
 ];
+
+ACTIONS.push({
+  id: 'rest', scope: 'team', glyph: '☾', label: 'REST',
+  hint: 'stand the team down — morale recovers, output dips',
+  cool: 25,
+  enabled: (sim, team) => team.morale < 0.7,
+  run: (sim, team) => {
+    team.morale = clamp(team.morale + 0.3, 0.05, 1);
+    team.crunchUntil = 0;
+    team.projects.forEach((id) => {
+      const p = sim.org.byId[id];
+      p.priority = Math.min(p.priority || 1, 0.75);
+      p.focusUntil = sim.org.day + 2;
+    });
+    const d = sim.city.districts[team.id];
+    d.pressure = Math.max(0, d.pressure - 0.15);
+    sim.ring(d.cx, d.cy, 0, Math.max(d.W, d.D) * 1.1, 200, 1.1);
+    sim.say(`${team.name} · stood down — morale ${(team.morale * 100) | 0}%`, 200, true);
+  },
+});
 
 const ACTIONS_BY_SCOPE = {
   project: ACTIONS.filter((a) => a.scope === 'project'),

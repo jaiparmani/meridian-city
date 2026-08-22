@@ -196,6 +196,10 @@ class Sim {
         if (a) { a.mode = 'finishing'; this.sendHome(a, 'finishing'); }
         org.shipped++;
         this.throughput += 1;
+      } else if (ev.type === 'incident') {
+        const p = org.byId[ev.project];
+        if (!p || p.incident) return;
+        this.startIncident(p);
       } else if (ev.type === 'milestone') {
         const p = org.byId[ev.project]; if (!p) return;
         const m = p.milestones.find((x) => !x.done); if (!m) return;
@@ -205,6 +209,111 @@ class Sim {
         this.say(`${p.name} · ${m.name} complete`, org.teams[p.team].hue);
       }
     });
+  }
+
+  /* ---------- incidents ---------------------------------- */
+  startIncident(p) {
+    const org = this.org, city = this.city;
+    const b = city.byProject[p.id];
+    if (!b) return;
+    const inc = {
+      project: p.id, t: 0, limit: 95, severity: rr(0.6, 1), responders: [],
+      name: p.name, team: p.team,
+    };
+    p.incident = inc;
+    org.incidents.push(inc);
+    b.shake = 1.4;
+    b.litBefore = b.lit;
+    this.ring(b.x, b.y, 0, Math.max(b.w, b.d) * 4, 4, 1.6);
+    for (let i = 0; i < 40; i++) {
+      const a2 = rnd() * TAU, sp = rr(8, 30);
+      this.fx.push({
+        type: 'dust', x: b.x, y: b.y, z: buildingHeight(b) * rr(0.4, 1),
+        vx: Math.cos(a2) * sp, vy: Math.sin(a2) * sp, vz: rr(6, 20),
+        life: 0, max: rr(1.4, 3), r: rr(3, 9), hue: 6,
+      });
+    }
+    // response vehicles converge from the neighbourhood
+    const d = city.districts[p.team];
+    for (let i = 0; i < 4; i++) {
+      const from = pick(d.nodes);
+      const a3 = {
+        id: 'R' + p.id + i, responder: true, resident: true,
+        task: { state: 'response', title: '', done: 0 },
+        kind: 'car', mass: 2.4, hue: 4, vmax: 46, speed: 0, s: 0, edgeId: -1,
+        dir: 1, path: null, pi: 0, x: 0, y: 0, ang: 0, stopped: false, park: -1,
+        mode: 'toBuilding', wob: rnd() * TAU, trail: [], life: 0, alpha: 0,
+        beacon: 0, seedv: rnd(), home: b, siren: rnd() * TAU,
+      };
+      this.agents.push(a3);
+      const path = routeNodes(city, from, b.driveNode);
+      if (path) this.setPath(a3, path); else a3.mode = 'idle';
+      inc.responders.push(a3);
+    }
+    org.teams[p.team].morale = clamp(org.teams[p.team].morale - 0.05, 0.05, 1);
+    this.say(`${p.name} · INCIDENT — structure down`, 4);
+    this.alert = { text: `${p.name} DOWN`, t: 0, project: p.id };
+  }
+
+  stepIncidents(dt) {
+    const org = this.org, city = this.city;
+    for (const inc of org.incidents) {
+      inc.t += dt;
+      const b = city.byProject[inc.project];
+      const p = org.byId[inc.project];
+      if (!b || !p) { inc.done = true; continue; }
+      b.lit = Math.max(0.04, b.lit - dt * 0.5);
+      b.alarm = 1;
+      if (chance(dt * 6)) {
+        this.fx.push({
+          type: 'dust', x: b.x + rr(-b.w, b.w) * 0.5, y: b.y + rr(-b.d, b.d) * 0.5,
+          z: buildingHeight(b), vx: rr(-3, 3), vy: rr(-3, 3), vz: rr(9, 20),
+          life: 0, max: rr(2.2, 4.5), r: rr(5, 13), hue: 6,
+        });
+      }
+      const d = city.districts[p.team];
+      d.pressure = Math.min(1.4, d.pressure + dt * 0.06);
+      // ignored too long: it resolves itself, and it costs
+      if (inc.t > inc.limit) {
+        this.endIncident(inc, false);
+      }
+    }
+    org.incidents = org.incidents.filter((i) => !i.done);
+    if (this.alert) {
+      this.alert.t += dt;
+      const still = org.incidents.some((i) => i.project === this.alert.project);
+      if (!still && this.alert.t > 3) this.alert = null;
+    }
+  }
+
+  endIncident(inc, byHand) {
+    const org = this.org, city = this.city;
+    const p = org.byId[inc.project];
+    const b = city.byProject[inc.project];
+    inc.done = true;
+    if (p) p.incident = null;
+    for (const r of inc.responders) r.leaving = true;
+    if (!b || !p) return;
+    if (byHand) {
+      b.lit = p.progress;
+      b.glow = 1.5;
+      this.ring(b.x, b.y, 0, Math.max(b.w, b.d) * 3.4, 150, 1.4);
+      for (let i = 0; i < 16; i++) this.spawnMote(b, buildingHeight(b) * rr(0.2, 1));
+      this.say(`${p.name} · recovered`, 150, true);
+    } else {
+      // nobody came: the work slips and the team wears it
+      p.deadlineDay -= 2.5;
+      p.progress = Math.max(0, p.progress - 0.06);
+      const done = p.milestones.filter((m) => m.done);
+      if (done.length) {
+        done[done.length - 1].done = false;
+        if (b.targetFloors > 2) b.targetFloors -= 1;
+      }
+      org.teams[p.team].morale = clamp(org.teams[p.team].morale - 0.14, 0.05, 1);
+      b.lit = p.progress * 0.6;
+      this.ring(b.x, b.y, 0, Math.max(b.w, b.d) * 3, 4, 1.2);
+      this.say(`${p.name} · incident burned out — a floor lost`, 4);
+    }
   }
 
   growBuilding(b, label) {
@@ -256,6 +365,8 @@ class Sim {
 
     this.applyEvents(stepOrg(org, dt, this));
     this.traffic(dt);
+    this.releaseQueues(dt);
+    this.stepIncidents(dt);
     this.stepAgents(dt);
     this.stepBuildings(dt);
     this.stepMotes(dt);
@@ -282,7 +393,8 @@ class Sim {
       e.agents.push(a);
       e.mass += a.mass;
       // only genuinely immobile work chokes a road; slow traffic barely counts
-      if (a.stopped) e.stopMass += a.mass * (a.task.state === ST.BLOCKED ? 1 : 0.18);
+      if (a.stopped) e.stopMass += a.mass *
+        (a.task.state === ST.BLOCKED ? 1 : a.task.state === ST.QUEUED ? 0.4 : 0.18);
     }
     // order along each edge so vehicles can see the one in front
     for (const e of E) {
@@ -314,6 +426,24 @@ class Sim {
       a.alpha = Math.min(1, a.alpha + dt * 1.6);
       a.beacon += dt;
 
+      if (a.mode === 'onScene') {
+        a.speed = 0; a.stopped = true;
+        const e0 = city.edges[a.edgeId];
+        if (e0) this.placeAgent(a, e0);
+        if (a.leaving) {
+          a.mode = 'circulate'; a.stopped = false;
+          const p2 = routeNodes(city, a.path ? a.path[a.pi] : a.home.driveNode, pick(city.gates));
+          if (p2) this.setPath(a, p2); else a.dead = true;
+        }
+        continue;
+      }
+      if (a.mode === 'queued') {
+        a.speed = damp(a.speed, 0, 8, dt);
+        a.stopped = true;
+        const e0 = city.edges[a.edgeId];
+        if (e0) this.placeAgent(a, e0);
+        continue;
+      }
       if (a.mode === 'idle' || !a.path) { if (chance(dt * 1.5)) this.circulate(a); continue; }
       const e = city.edges[a.edgeId];
       if (!e) { this.circulate(a); continue; }
@@ -379,6 +509,19 @@ class Sim {
       }
       for (const p of a.trail) p.t += dt;
     }
+    // low morale empties the streets: people drive out and do not come back
+    for (const tm of this.org.teams) {
+      if (tm.morale < 0.34 && chance(dt * 0.10)) {
+        const pool = this.agents.filter((q) => q.resident && !q.responder && !q.leaving);
+        if (pool.length > 90) {
+          const q = pick(pool);
+          q.leaving = true;
+          const p2 = routeNodes(this.city, q.path ? q.path[q.pi] : this.city.districts[tm.id].gate, pick(this.city.gates));
+          if (p2) this.setPath(q, p2);
+          q.mode = 'departing';
+        }
+      }
+    }
     this.agents = this.agents.filter((a) => !a.dead);
   }
 
@@ -413,6 +556,11 @@ class Sim {
   arrive(a) {
     const t = a.task;
     a.speed *= 0.3;
+    if (a.responder) {
+      if (a.leaving) { a.dead = true; return; }
+      a.mode = 'onScene'; a.stopped = true; a.speed = 0;
+      return;
+    }
     if (a.mode === 'finishing') {
       const b = a.home;
       b.glow = Math.min(1.6, b.glow + 0.7);
@@ -425,8 +573,27 @@ class Sim {
       return;
     }
     if (a.mode === 'toBuilding') {
-      if (t.state === ST.INBOUND) {
+      if (t.state === ST.INBOUND || t.state === ST.QUEUED) {
+        const p = this.org.byId[t.project];
+        if (p && p.wip > 0 && p.activeCount >= p.wip) {
+          // the project is full: wait at the kerb where everyone can see you
+          t.state = ST.QUEUED;
+          a.mode = 'queued';
+          a.stopped = true;
+          a.speed = 0;
+          if (t.queuedAt === undefined) t.queuedAt = this.org.day;
+          // take a slot in the line so the queue reads as a queue
+          let slot = 0;
+          for (const q of this.agents) {
+            if (q !== a && q.mode === 'queued' && q.home === a.home) slot++;
+          }
+          a.queueSlot = slot;
+          const e = this.city.edges[a.edgeId];
+          if (e) a.s = clamp(e.len - 3 - slot * 7.5, 1.5, e.len - 1.5);
+          return;
+        }
         t.state = ST.ACTIVE;
+        t.queuedAt = undefined;
         t.log.push({ day: this.org.day, text: 'started' });
         a.home.glow = Math.min(1.4, a.home.glow + 0.35);
         this.ring(a.home.x, a.home.y, 0, Math.max(a.home.w, a.home.d) * 1.2, a.home.hue, 0.3);
@@ -439,8 +606,50 @@ class Sim {
       this.sendHome(a, 'toBuilding');
       return;
     }
+    if (a.mode === 'departing') { a.dead = true; return; }
     if (a.mode === 'toBlocker') { a.stopped = true; return; }
     this.circulate(a);
+  }
+
+  /* when a project has room again, the longest wait gets in first */
+  releaseQueues(dt) {
+    const org = this.org;
+    this._rel = (this._rel || 0) + dt;
+    if (this._rel < 0.4) return;
+    this._rel = 0;
+    for (const p of org.projects) {
+      if (!p.queued) continue;
+      let room = p.wip > 0 ? p.wip - p.activeCount : 99;
+      if (room <= 0 || p.incident) continue;
+      const waiting = p.tasks.map((id) => org.byId[id])
+        .filter((t) => t && t.state === ST.QUEUED)
+        .sort((x, y) => (x.queuedAt || 0) - (y.queuedAt || 0));
+      for (const t of waiting) {
+        if (room-- <= 0) break;
+        t.state = ST.ACTIVE;
+        t.queuedAt = undefined;
+        t.log.push({ day: org.day, text: 'started' });
+        const a = this.byTask[t.id];
+        if (a) {
+          const freed = a.queueSlot || 0;
+          a.mode = 'toBuilding';
+          a.stopped = false;
+          a.queueSlot = undefined;
+          // everyone behind moves up one place
+          for (const q of this.agents) {
+            if (q.mode !== 'queued' || q.home !== a.home) continue;
+            if ((q.queueSlot || 0) > freed) {
+              q.queueSlot -= 1;
+              const qe = this.city.edges[q.edgeId];
+              if (qe) q.s = clamp(qe.len - 3 - q.queueSlot * 7.5, 1.5, qe.len - 1.5);
+            }
+          }
+          this.circulate(a);
+          const b = this.city.byProject[p.id];
+          if (b) { b.glow = Math.min(1.4, b.glow + 0.3); this.ring(b.x, b.y, 0, Math.max(b.w, b.d) * 1.1, b.hue, 0.35); }
+        }
+      }
+    }
   }
 
   stepBuildings(dt) {

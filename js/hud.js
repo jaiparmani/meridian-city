@@ -43,6 +43,7 @@ class HUD {
     this.chrome(ctx, sim, cam, ui, lod);
     this.detail(ctx, sim, cam, ui, R, dt);
     this.ticker(ctx, sim, cam, ui);
+    this.incidents(ctx, sim, cam, ui);
     this.firstHint(ctx, sim, cam, ui);
     if (ui.help) this.helpCard(ctx, cam);
     if (this.boot < 1) this.bootMask(ctx, cam);
@@ -86,6 +87,9 @@ class HUD {
     const city = sim.city, org = sim.org;
     const show = new Set();
     this.taken = this.panelBox ? [this.panelBox] : [];
+    // the fixed instrument cluster is not available to world labels
+    this.taken.push([0, cam.H - 190, 320, 190]);      // intake + pulse + counters
+    this.taken.push([0, 0, 300, 260]);                // identity block + signal feed
 
     // districts
     if (lod <= LOD.PROJECT) {
@@ -185,8 +189,15 @@ class HUD {
     ctx.font = `500 ${size * 0.46}px ${MONO}`;
     ctx.fillStyle = 'rgba(200,225,240,0.7)';
     ctx.fillText(`${d.motto}`, l.sx, l.sy + size * 0.85);
+    const mor = org.teams[d.team].morale;
+    const queued = projects.reduce((s, p) => s + (p.queued || 0), 0);
     ctx.fillStyle = blocked ? 'rgba(255,110,80,0.95)' : 'rgba(140,220,255,0.8)';
-    ctx.fillText(`${open} open · ${blocked} blocked · ${(d.pressure * 100) | 0}% load`, l.sx, l.sy + size * 1.5);
+    ctx.fillText(`${open} open · ${blocked} blocked${queued ? ` · ${queued} waiting` : ''} · ${(d.pressure * 100) | 0}% load`,
+      l.sx, l.sy + size * 1.5);
+    if (mor < 0.5) {
+      ctx.fillStyle = `rgba(255,${mor < 0.34 ? 100 : 170},80,0.95)`;
+      ctx.fillText(`morale ${(mor * 100) | 0}%`, l.sx, l.sy + size * 2.6);
+    }
     // load bar
     const bw = size * 7, bh = Math.max(2, size * 0.13);
     const bx = l.sx - bw / 2, by = l.sy + size * 2.0;
@@ -237,6 +248,16 @@ class HUD {
     if (proj.blocked) {
       ctx.fillStyle = 'rgba(255,80,60,0.95)';
       ctx.beginPath(); ctx.arc(bw + 60, 18.5, 2.6, 0, TAU); ctx.fill();
+    }
+    if (proj.queued) {
+      ctx.font = `600 8px ${MONO}`;
+      ctx.fillStyle = 'rgba(255,194,77,0.95)';
+      ctx.fillText(`≡${proj.queued} waiting`, 0, 30);
+    }
+    if (proj.incident) {
+      ctx.font = `700 9px ${MONO}`;
+      ctx.fillStyle = `rgba(255,90,60,${0.6 + 0.4 * Math.sin(sim.time * 5)})`;
+      ctx.fillText('⚠ DOWN', 76, 30);
     }
     ctx.restore();
   }
@@ -368,8 +389,9 @@ class HUD {
     ctx.fillText('N', Math.sin(cam.yaw) * 0 + 0, -28);
     ctx.restore();
 
-    /* bottom-left: city pulse */
+    /* bottom-left: city pulse and the valve above it */
     this.pulse(ctx, sim, cam, stats, b);
+    this.intake(ctx, sim, cam, b);
 
     /* bottom-right: legend */
     ctx.save();
@@ -385,6 +407,46 @@ class HUD {
       ctx.fillStyle = 'rgba(170,205,225,0.55)';
       ctx.fillText(t, W - 24, H - 26 + i * 12 - 24);
     });
+    ctx.restore();
+  }
+
+  /* the valve on new work — an instrument, not a form control */
+  intake(ctx, sim, cam, b) {
+    const org = sim.org;
+    const x = 24, y = cam.H - 142, w = 260, h = 8;
+    this.intakeBox = [x - 6, y - 20, w + 12, h + 32];
+    ctx.save();
+    ctx.globalAlpha = b;
+    ctx.textAlign = 'left';
+    ctx.font = `600 9px ${MONO}`;
+    ctx.fillStyle = 'rgba(160,205,230,0.65)';
+    ctx.fillText('INTAKE VALVE', x, y - 10);
+    const pct = org.intake;
+    ctx.textAlign = 'right';
+    ctx.fillStyle = pct < 0.05 ? '#ff6a4a' : pct > 1.4 ? '#ffc24d' : CY;
+    ctx.font = `700 10px ${MONO}`;
+    ctx.fillText(pct < 0.05 ? 'CLOSED' : `${(pct * 100) | 0}%`, x + w, y - 10);
+    ctx.textAlign = 'left';
+    // track
+    ctx.fillStyle = 'rgba(255,255,255,0.10)';
+    ctx.fillRect(x, y, w, h);
+    for (let i = 0; i <= 4; i++) {
+      ctx.fillStyle = 'rgba(160,205,230,0.25)';
+      ctx.fillRect(x + (w - 1) * (i / 4), y - 3, 1, h + 6);
+    }
+    const t = clamp(org.intake / 2);
+    const g = ctx.createLinearGradient(x, 0, x + w * t, 0);
+    g.addColorStop(0, 'rgba(127,233,255,0.35)');
+    g.addColorStop(1, pct > 1.2 ? 'rgba(255,194,77,0.95)' : 'rgba(127,233,255,0.95)');
+    ctx.fillStyle = g;
+    ctx.fillRect(x, y, w * t, h);
+    // handle
+    const hx = x + w * t;
+    ctx.fillStyle = '#eaf8ff';
+    ctx.fillRect(hx - 2, y - 6, 4, h + 12);
+    ctx.font = `500 8px ${MONO}`;
+    ctx.fillStyle = 'rgba(150,190,215,0.5)';
+    ctx.fillText('drag  ·  [ ]', x, y + h + 12);
     ctx.restore();
   }
 
@@ -698,6 +760,15 @@ class HUD {
     ctx.font = `500 8px ${MONO}`;
     ctx.fillStyle = 'rgba(170,205,225,0.6)';
     ctx.fillText(`${p.activeCount} moving · ${p.blocked} stalled`, 160, by + 16);
+    if (p.wip > 0) {
+      ctx.fillStyle = p.atLimit ? 'rgba(255,194,77,0.95)' : 'rgba(150,215,255,0.8)';
+      ctx.fillText(`WIP ${p.activeCount}/${p.wip}${p.queued ? ` · ${p.queued} waiting` : ''}`, 160, by + 26);
+    }
+    if (p.incident) {
+      ctx.font = `700 10px ${MONO}`;
+      ctx.fillStyle = `rgba(255,100,70,${0.65 + 0.35 * Math.sin(sim.time * 5)})`;
+      ctx.fillText('⚠ STRUCTURE DOWN', 14, by - 26);
+    }
   }
 
   taskReadout(ctx, sim, t, hue, w, h) {
@@ -795,7 +866,23 @@ class HUD {
     });
     ctx.font = `500 9px ${MONO}`;
     ctx.fillStyle = 'rgba(180,215,235,0.8)';
-    ctx.fillText(`WEATHER LOAD ${Math.min(100, (d.pressure * 100) | 0)}%   STORM ${Math.min(100, (d.storm * 100) | 0)}%`, 14, h - 14);
+    ctx.fillText(`LOAD ${Math.min(100, (d.pressure * 100) | 0)}%   STORM ${Math.min(100, (d.storm * 100) | 0)}%`, 14, h - 26);
+    // morale
+    const mor = team.morale;
+    ctx.fillStyle = 'rgba(180,215,235,0.8)';
+    ctx.fillText('MORALE', 14, h - 12);
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.fillRect(66, h - 16, 120, 5);
+    ctx.fillStyle = mor < 0.35 ? '#ff5a3c' : mor < 0.6 ? '#ffb347' : '#8fe9c0';
+    ctx.fillRect(66, h - 16, 120 * clamp(mor), 5);
+    ctx.fillStyle = mor < 0.35 ? '#ff8a6a' : '#dff2ff';
+    ctx.font = `700 9px ${MONO}`;
+    ctx.fillText(`${(mor * 100) | 0}%`, 194, h - 12);
+    if (mor < 0.34) {
+      ctx.font = `500 8px ${MONO}`;
+      ctx.fillStyle = 'rgba(255,140,110,0.9)';
+      ctx.fillText('people are leaving', 232, h - 12);
+    }
   }
 
   /* ---- event ticker ------------------------------------- */
@@ -825,6 +912,60 @@ class HUD {
       }
     });
     ctx.restore();
+  }
+
+  /* something is down — you should not be able to miss it */
+  incidents(ctx, sim, cam, ui) {
+    const list = sim.org.incidents;
+    if (!list.length) return;
+    const W = cam.W, H = cam.H;
+    const puls = 0.55 + 0.45 * Math.sin(sim.time * 4.5);
+    list.forEach((inc, i) => {
+      const b = sim.city.byProject[inc.project];
+      if (!b) return;
+      const left = clamp(1 - inc.t / inc.limit);
+      // banner
+      const bw = 300, bx = W / 2 - bw / 2, by = 62 + i * 40;
+      ctx.save();
+      roundRectPath(ctx, bx, by, bw, 30, 2);
+      ctx.fillStyle = `rgba(40,8,8,${0.72 + puls * 0.12})`;
+      ctx.fill();
+      ctx.strokeStyle = `rgba(255,90,60,${0.5 + puls * 0.45})`;
+      ctx.lineWidth = 1.4; ctx.stroke();
+      ctx.textAlign = 'left';
+      ctx.font = `700 11px ${MONO}`;
+      ctx.fillStyle = `rgba(255,140,110,${0.8 + puls * 0.2})`;
+      ctx.fillText('⚠', bx + 12, by + 13);
+      ctx.fillStyle = '#ffe4dc';
+      ctx.fillText(`${inc.name.toUpperCase()} DOWN`, bx + 30, by + 13);
+      ctx.font = `500 8px ${MONO}`;
+      ctx.fillStyle = 'rgba(255,190,175,0.75)';
+      ctx.fillText(`${sim.org.teams[inc.team].name} · select it and RESPOND`, bx + 30, by + 24);
+      // how long you have
+      ctx.fillStyle = 'rgba(255,255,255,0.14)';
+      ctx.fillRect(bx + 1, by + 28, bw - 2, 2);
+      ctx.fillStyle = left < 0.3 ? '#ff4a2a' : '#ff9a6a';
+      ctx.fillRect(bx + 1, by + 28, (bw - 2) * left, 2);
+      ctx.restore();
+
+      // an arrow at the edge if it is not on screen
+      const p = cam.proj(b.x, b.y, buildingHeight(b) * 0.6, {});
+      const m = 60;
+      if (p.x > m && p.x < W - m && p.y > m && p.y < H - m) return;
+      const cx = W / 2, cy = H / 2;
+      const ang = Math.atan2(p.y - cy, p.x - cx);
+      const rx = W / 2 - 54, ry = H / 2 - 54;
+      const ex = cx + Math.cos(ang) * Math.min(rx, Math.abs(rx / Math.cos(ang)) || rx);
+      const ey = cy + Math.sin(ang) * Math.min(ry, Math.abs(ry / Math.sin(ang)) || ry);
+      ctx.save();
+      ctx.translate(clamp(ex, 40, W - 40), clamp(ey, 40, H - 40));
+      ctx.rotate(ang);
+      ctx.fillStyle = `rgba(255,80,55,${0.6 + puls * 0.4})`;
+      ctx.beginPath();
+      ctx.moveTo(16, 0); ctx.lineTo(-8, -9); ctx.lineTo(-3, 0); ctx.lineTo(-8, 9);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    });
   }
 
   /* one nudge on arrival, then it gets out of the way for good */

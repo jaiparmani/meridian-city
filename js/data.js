@@ -39,6 +39,7 @@ const LAST = ['Vane', 'Okoro', 'Lund', 'Ferris', 'Adeyemi', 'Novak', 'Reyes', 'S
 /* task states — these map 1:1 onto behaviours in the city */
 const ST = {
   INBOUND: 'inbound',   // arriving from outside the city, driving to its building
+  QUEUED: 'queued',     // arrived, but the project is at its WIP limit — parked outside
   ACTIVE: 'active',     // working: circulating around its block
   BLOCKED: 'blocked',   // parked on a dependency road, causing a jam
   REVIEW: 'review',     // heading to the reviewer's building
@@ -90,6 +91,8 @@ function buildOrg() {
   const org = {
     name: 'MERIDIAN',
     day: 0.30,
+    intake: 1,           // the valve on new work coming off the coast
+    incidents: [],
     teams: [],
     projects: [],
     tasks: [],
@@ -124,6 +127,8 @@ function buildOrg() {
         risk: 0,
         priority: 1,
         focusUntil: 0,
+        wip: 0,              // 0 = no limit
+        incident: null,
         lastShip: -99,
         activity: 0,
       };
@@ -186,6 +191,8 @@ function recomputeProject(p, org) {
   p.blocked = open.filter((t) => t.state === ST.BLOCKED).length;
   p.openCount = open.length;
   p.activeCount = open.filter((t) => t.state === ST.ACTIVE).length;
+  p.queued = open.filter((t) => t.state === ST.QUEUED).length;
+  p.atLimit = p.wip > 0 && p.activeCount >= p.wip;
   return p;
 }
 
@@ -216,7 +223,10 @@ function stepOrg(org, dt, sim) {
     t.heat = Math.max(0, t.heat - dt * 0.035);
     if (t.state === ST.ACTIVE) {
       const p = org.byId[t.project];
-      const rate = (1 / (t.hours * SEC_PER_HOUR)) * dt * (p.priority || 1) * (t.boost || 1);
+      if (p.incident) return;                       // nothing moves while it is down
+      const morale = org.teams[t.team].morale;
+      const rate = (1 / (t.hours * SEC_PER_HOUR)) * dt *
+        (p.priority || 1) * (t.boost || 1) * (0.5 + morale * 0.7);
       t.done = clamp(t.done + rate);
       p.activity = Math.min(1, p.activity + dt * 0.12);
       if (t.done >= 1) queueEvent(org, { type: 'complete', task: t.id });
@@ -232,7 +242,12 @@ function stepOrg(org, dt, sim) {
   org.tasks.forEach((t) => {
     if (t.boost) { t.boost = Math.max(1, t.boost - dt * 0.06); if (t.boost <= 1.01) t.boost = 0; }
   });
-  org.teams.forEach((tm) => { if (tm.crunchUntil && org.day > tm.crunchUntil) tm.crunchUntil = 0; });
+  org.teams.forEach((tm) => {
+    if (tm.crunchUntil && org.day > tm.crunchUntil) tm.crunchUntil = 0;
+    // morale recovers slowly, and never quite reaches contentment on its own
+    const target = tm.crunchUntil ? 0.32 : 0.78;
+    tm.morale = clamp(tm.morale + (target - tm.morale) * dt * 0.02, 0.05, 1);
+  });
 
   // retire old finished work so a long session does not grow without bound
   if (org.tasks.length > 420) {
@@ -249,9 +264,11 @@ function stepOrg(org, dt, sim) {
 
   // each kind of event runs on its own clock, so the city can be
   // balanced directly instead of by fighting over one dice roll
-  if (!org._acc) org._acc = { arrive: 0, block: 0, unblock: 0, review: 0, milestone: 0 };
+  if (!org._acc) org._acc = { arrive: 0, block: 0, unblock: 0, review: 0, milestone: 0, incident: 0 };
+  if (org._acc.incident === undefined) org._acc.incident = 0;
   for (const kind in EVENT_RATE) {
-    org._acc[kind] += dt * EVENT_RATE[kind];
+    const scale = kind === 'arrive' ? org.intake : 1;
+    org._acc[kind] += dt * EVENT_RATE[kind] * scale;
     while (org._acc[kind] >= 1) { org._acc[kind] -= 1; fireEvent(org, kind); }
   }
   return drainEvents(org);
@@ -263,11 +280,12 @@ function drainEvents(org) { const e = org.events; org.events = []; return e; }
 /* events per second, across the whole city. These are the dials
    that decide whether the city fills up or drains away. */
 const EVENT_RATE = {
-  arrive: 0.78,     // new work off the highway
+  arrive: 0.78,     // new work off the highway (scaled by org.intake)
   block: 0.055,     // something stalls on a dependency
   unblock: 0.110,   // something gets cleared
   review: 0.09,     // work goes out for review
   milestone: 0.018, // a floor gets added somewhere
+  incident: 0.008,  // something falls over and demands an answer
 };
 const OPEN_CEILING = 190;
 
@@ -311,6 +329,19 @@ function fireEvent(org, kind) {
     const cands = open.filter((t) => t.state === ST.ACTIVE && t.done > 0.5);
     if (!cands.length) return;
     queueEvent(org, { type: 'review', task: cands[Math.floor(R() * cands.length)].id });
+    return;
+  }
+  if (kind === 'incident') {
+    if (org.incidents.length >= 2) return;      // never more than two fires at once
+    const cands = org.projects.filter((p) => !p.incident && p.progress > 0.1 && p.progress < 1);
+    if (!cands.length) return;
+    // the projects carrying the most load are the ones that fall over
+    const weighted = [];
+    cands.forEach((p) => {
+      const w = 1 + p.risk * 2 + p.activeCount * 0.15;
+      for (let i = 0; i < Math.ceil(w); i++) weighted.push(p);
+    });
+    queueEvent(org, { type: 'incident', project: weighted[Math.floor(R() * weighted.length)].id });
     return;
   }
   if (kind === 'milestone') {

@@ -706,6 +706,17 @@ Object.assign(Renderer.prototype, {
 
     // windows — the lit fraction is the project's progress
     if (screenW > 34) this.windows(ctx, cam, pal, b, proj, faces, bp, tp, h, sim, dim);
+    else if (proj.incident) {
+      const c0 = cam.proj(b.x, b.y, h * 0.55, this.p1);
+      const gr = clamp(Math.max(b.w, h) * s * 1.3, 6, 110);
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = (0.35 + 0.35 * Math.sin(sim.time * 4.5)) * dim;
+      ctx.fillStyle = 'rgb(255,60,40)';
+      ctx.drawImage(this.glow, c0.x - gr, c0.y - gr, gr * 2, gr * 2);
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
     else if (b.litDisp > 0.05) {
       // too far to resolve windows: the tower becomes the light it emits
       const c0 = cam.proj(b.x, b.y, h * 0.55, this.p1);
@@ -751,12 +762,31 @@ Object.assign(Renderer.prototype, {
     if (screenW > 40) this.rooftop(ctx, cam, pal, b, proj, h, sim, tp, dim);
 
     // risk aura: late projects burn
-    const risk = proj.risk;
+    const risk = proj.incident ? 0 : proj.risk;
     if (risk > 0.55) {
       const c0 = cam.proj(b.x, b.y, h * 0.55, this.p1);
       this.tint(ctx, c0.x, c0.y, Math.max(b.w, h) * s * 0.9,
         hsl(lerp(40, 2, clamp((risk - 0.55) / 0.8)), 95, 55),
         clamp((risk - 0.55) * 0.30) * (0.6 + 0.4 * Math.sin(sim.time * 2.2 + b.seed * 10)) * dim);
+    }
+    // a structure that is down
+    if (proj.incident) {
+      const puls = 0.5 + 0.5 * Math.sin(sim.time * 4.5);
+      const c1 = cam.proj(b.x, b.y, h * 0.55, this.p1);
+      this.tint(ctx, c1.x, c1.y, Math.max(b.w, h) * s * 1.1, 'rgb(210,30,18)', (0.07 + puls * 0.09) * dim);
+      // a cordon on the ground
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = `rgba(255,80,55,${0.35 + puls * 0.4})`;
+      ctx.lineWidth = Math.max(1, 2 * s * 0.3);
+      ctx.setLineDash([6 * s * 0.4, 5 * s * 0.4]);
+      ctx.lineDashOffset = -(sim.time * 14) % 40;
+      const cbase = cam.proj(b.x, b.y, 0.4, this.p2);
+      ctx.save();
+      ctx.translate(cbase.x, cbase.y); ctx.scale(1, PITCH);
+      ctx.beginPath(); ctx.arc(0, 0, Math.max(4, Math.max(b.w, b.d) * 1.5 * s), 0, TAU); ctx.stroke();
+      ctx.restore();
+      ctx.restore();
     }
     // completion / milestone bloom
     if (b.glow > 0.01) {
@@ -1083,7 +1113,12 @@ Object.assign(Renderer.prototype, {
   /* ---- traffic ------------------------------------------ */
   agentColor(a, sim) {
     const st = a.task.state;
+    if (a.responder) {
+      // emergency lights, alternating
+      return ((sim.time * 5 + a.siren) % 1) < 0.5 ? [255, 70, 60] : [110, 170, 255];
+    }
     if (a.resident) return a.kind === 'walk' ? [128, 146, 162] : [150, 168, 184];
+    if (st === ST.QUEUED) return [255, 186, 70];
     if (st === ST.BLOCKED) return [255, 70, 52];
     if (st === ST.REVIEW) return [180, 130, 255];
     if (st === ST.INBOUND) return [120, 235, 255];
@@ -1191,6 +1226,25 @@ Object.assign(Renderer.prototype, {
       ctx.beginPath(); ctx.arc(fp.x, fp.y, Math.max(0.6, s * 0.13), 0, TAU); ctx.fill();
       ctx.fillStyle = 'rgba(255,60,40,0.9)';
       ctx.beginPath(); ctx.arc(rp.x, rp.y, Math.max(0.5, s * 0.11), 0, TAU); ctx.fill();
+      // waiting for a slot: a slow amber pulse, not a hazard
+      if (a.task.state === ST.QUEUED) {
+        const bp3 = cam.proj(a.x, a.y, hgt + 1.2, this.p2);
+        const pl = 0.4 + 0.6 * Math.abs(Math.sin(sim.time * 1.5 + a.seedv * 6));
+        ctx.globalAlpha = pl * 0.85;
+        ctx.fillStyle = 'rgba(255,190,80,1)';
+        ctx.beginPath(); ctx.arc(bp3.x, bp3.y, Math.max(0.8, s * 0.16), 0, TAU); ctx.fill();
+        ctx.globalAlpha = pl * 0.5;
+        ctx.drawImage(this.glow, bp3.x - 14, bp3.y - 14, 28, 28);
+        ctx.globalAlpha = 1;
+      }
+      // responders throw light on the road around them
+      if (a.responder) {
+        const gp = cam.proj(a.x, a.y, 1, this.p2);
+        const gr = clamp(20 * s * 0.3, 8, 60);
+        ctx.globalAlpha = 0.5 + 0.4 * Math.sin(sim.time * 9 + a.siren);
+        ctx.drawImage(this.glow, gp.x - gr, gp.y - gr, gr * 2, gr * 2);
+        ctx.globalAlpha = 1;
+      }
       // hazard beacon for blocked work
       if (a.task.state === ST.BLOCKED) {
         const blink = (sim.time * 2.6 + a.seedv * 5) % 1 < 0.5;

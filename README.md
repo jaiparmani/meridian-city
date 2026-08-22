@@ -68,6 +68,8 @@ a toolbar. Every command has a physical consequence you can watch happen.
 | `⇢ SURGE` | three new tasks drive in off the coast road |
 | `⊕ EXTEND` | push the deadline out — the weather over that district eases |
 | `✦ FOCUS` | prioritise it — work moves faster here, and windows start lighting |
+| `≡ WIP` | cap work in progress — the excess is sent back to the kerb (see below) |
+| `⚠ RESPOND` | answer an incident and bring the structure back up |
 
 **On a task**
 
@@ -84,12 +86,56 @@ a toolbar. Every command has a physical consequence you can watch happen.
 |---|---|
 | `✚ HIRE` | a car comes in off the highway; capacity goes up |
 | `❖ ALL HANDS` | every blockage in the district clears at once |
-| `◈ CRUNCH` | everything here moves faster — and the pressure climbs |
+| `◈ CRUNCH` | everything here moves faster — and morale pays for it |
+| `☾ REST` | stand the team down — morale recovers, output dips |
 
 Commands recharge on a cooldown that sweeps around the dial, and their effects
 **wear off**, so the city drifts back to its own equilibrium if you leave it
 alone. Your commands appear in the signal feed marked `▸`, distinct from what
 the city did on its own.
+
+### WIP limits, made of traffic
+
+Cap a project and the excess work is **sent back out to the kerb** — least
+finished first. Those vehicles drive back to the building and park nose-to-tail
+in a line you can see from the street. Nothing progresses while it sits there.
+Free a slot and the front of the queue pulls in; everyone behind shuffles up.
+
+![Work queued at the kerb under a WIP cap](docs/queue.jpg)
+
+*Stop starting, start finishing* — as a row of amber vans outside the door.
+
+### The intake valve
+
+Bottom-left, above the pulse: a throttle on how fast new work enters the city
+at all. Drag it or use `[` and `]`. Close it and the coast highways empty while
+the backlog drains; open it past 100% and the gates flood. It scales the
+arrival rate directly, so you are turning the city's metabolism up and down and
+watching the traffic answer.
+
+### Incidents
+
+Sometimes a structure falls over. It goes dark, everything inside it stops, a
+cordon pulses on the ground, and four response vehicles converge from the
+neighbourhood with their lights going. A banner names it, and if you have
+wandered off there is an arrow at the edge of the screen pointing back.
+
+![A structure down, with responders on scene](docs/incident.jpg)
+
+You have about ninety seconds. `RESPOND` and it comes back up with a bloom of
+light. Ignore it and it burns out on its own: **a floor comes off the tower**,
+the milestone is un-shipped, the deadline pulls in two and a half days, and the
+team takes a morale hit. The city does not wait for you.
+
+### Morale
+
+Every team carries morale, and it multiplies their throughput. `CRUNCH` buys
+speed by spending it. Incidents cost it. It recovers slowly on its own, faster
+if you `REST` the team — which costs output while it lasts.
+
+Let it fall below a third and people start **leaving**: cars pull out of the
+neighbourhood, drive to a coast gate and don't come back. The streets get
+quieter, and they stay that way.
 
 ## Physics, not state changes
 
@@ -102,6 +148,7 @@ Nothing pops into existence.
   downtown and charges the core.
 - The event stream runs on explicit per-second rates, tuned so the city holds a
   steady state: ~105 tasks in progress, ~50 arriving, ~11 blocked, indefinitely.
+  `EVENT_RATE` in `js/data.js` is the metabolism; the intake valve scales it live.
 
 ![Street level](docs/street.jpg)
 
@@ -118,6 +165,7 @@ Nothing pops into existence.
 | `F` | lock onto a moving task and ride with it |
 | `1`–`5` | jump to an altitude |
 | `space` | hold time |
+| `[` `]` | close / open the intake valve |
 | `H` | the legend |
 | `R` | reset rotation |
 
