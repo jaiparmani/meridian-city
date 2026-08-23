@@ -21,7 +21,26 @@ do one thing yourself: clear a blockage and watch the queue drain.
 
 ![The walkthrough handing over control](docs/walkthrough.jpg)
 
-Nine beats, skippable at any point, and `G` replays it whenever you like.
+Nine beats, skippable at any point, and `G` replays it whenever you like. At the
+end it offers a second one — **how to run the city** — which puts your hands on
+the levers instead of narrating them: cap work in progress and watch the queue
+form outside, crunch a team and watch morale pay for it, answer an incident
+before it takes a floor off the tower. Six of its seven beats wait until you
+actually do the thing. `Shift+G` replays that one.
+
+### Nothing on screen is unexplained
+
+Point at any instrument — a counter, the pulse, the valve, the risk arc — and it
+says what it is and what a bad reading looks like. *"BLOCKED — tasks parked on a
+dependency, each one damming a road. Past about 20 the arteries start to seize."*
+
+Press `X` and the whole interface holds itself up to the light: every
+instrument and every kind of thing in the city labelled at once, tethered by
+leader lines, laid out in two gutters so nothing overlaps.
+
+![Explain mode labelling the whole interface](docs/explain.jpg)
+
+One body of copy, delivered both ways.
 
 ## What the city is
 
@@ -272,6 +291,8 @@ Nothing pops into existence.
 | `,` `.` | slower / faster |
 | `G` | replay the walkthrough |
 | `M` | sound on / off |
+| `X` | label everything on screen |
+| `Shift+G` | walkthrough: how to *run* the city |
 | `I` | load real work into the city |
 | `H` | the legend |
 | `R` | reset rotation |
@@ -333,6 +354,7 @@ js/persist.js   saving to localStorage and exporting a city as a file
 js/tour.js      what the city does when nobody is driving
 js/guide.js     the walkthrough, and the one thing it asks you to do
 js/sound.js     the city, synthesised — no audio files
+js/explain.js   what every instrument means, and the exploded view
 js/render.js    camera and renderer
 js/hud.js       instrumentation, tracking labels, readouts, command ring
 js/main.js      boot, input, picking, navigation

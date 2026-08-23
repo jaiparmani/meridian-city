@@ -16,6 +16,8 @@ const guide = {
   fade: 0,
   done: false,
   buttons: [],
+  script: null,
+  which: 'read',
   waiting: false,
   waitFrom: 0,
   subject: null,
@@ -27,7 +29,9 @@ const guide = {
     try { localStorage.setItem(GUIDE_KEY, String(Date.now())); } catch (e) { /* fine */ }
   },
 
-  start(sim, city, org, ui) {
+  start(sim, city, org, ui, which) {
+    this.which = which === 'run' ? 'run' : 'read';
+    this.script = this.which === 'run' ? RUN_BEATS : BEATS;
     this.active = true;
     this.step = -1;
     this.t = 0;
@@ -51,10 +55,12 @@ const guide = {
 
   /* move to the next beat, skipping any that have nothing to point at */
   advance(sim, city, org, ui) {
-    for (let guard = 0; guard < BEATS.length + 2; guard++) {
+    const script = this.script || BEATS;
+    for (let guard = 0; guard < script.length + 2; guard++) {
       this.step++;
-      if (this.step >= BEATS.length) { this.stop(ui, sim); return; }
-      const beat = BEATS[this.step];
+      if (this.step >= script.length) { this.stop(ui, sim); return; }
+      const beat = script[this.step];
+      if (beat.setup) { try { beat.setup(sim, city, org); } catch (e) { /* a beat that cannot set up just gets skipped */ } }
       const aim = beat.aim(sim, city, org);
       if (!aim) continue;                       // nothing to show; try the next
       this.t = 0;
@@ -63,7 +69,9 @@ const guide = {
       this.title = typeof beat.title === 'function' ? beat.title(aim, org) : beat.title;
       this.body = typeof beat.body === 'function' ? beat.body(aim, org, sim) : beat.body;
       this.interactive = !!beat.interactive;
+      this.offer = beat.offer || null;
       this.hold = beat.hold || 8;
+      this.mark = beat.mark ? beat.mark(sim, org, aim) : null;
       ui.selected = aim.select || null;
       if (aim.select) {
         ui.focusTeam = aim.select.type === 'project' ? org.byId[aim.select.id].team
@@ -86,14 +94,19 @@ const guide = {
     this.t += dt;
     if (ui.loader) return;
 
-    // an interactive beat ends when they actually do something
+    // an interactive beat ends when they actually do the thing
     if (this.waiting) {
-      if (sim.commands > this.waitFrom) {
+      const beat = (this.script || BEATS)[this.step];
+      let ok = false;
+      try {
+        ok = beat.done ? beat.done(sim, org, this.mark) : sim.commands > this.waitFrom;
+      } catch (e) { ok = sim.commands > this.waitFrom; }
+      if (ok) {
         this.waiting = false;
         this.t = 0;
-        this.hold = 3.2;
-        this.body = BEATS[this.step].after || 'Exactly that.';
-        this.title = BEATS[this.step].afterTitle || this.title;
+        this.hold = 4.2;
+        this.body = beat.after || 'Exactly that.';
+        this.title = beat.afterTitle || this.title;
       }
       return;
     }
@@ -214,11 +227,122 @@ const BEATS = [
     },
   },
   {
-    title: 'THAT IS THE TOUR',
+    title: 'THAT IS HOW TO READ IT',
     body: 'Scroll to change altitude, drag to move, click anything to command it. '
-        + 'Press I to build the city out of your own work, and H for the legend. '
-        + 'Leave it alone and it will start showing itself to you.',
-    hold: 10,
+        + 'X labels everything on screen, I builds the city from your own work, '
+        + 'H is the legend. Leave it alone and it will start showing itself to you.',
+    hold: 14,
+    offer: 'run',
+    aim: () => ({ x: 0, y: 30, s: 0.95 }),
+  },
+];
+
+/* ---------- the second walkthrough: how to run it ---------
+   The first tour teaches you to read the city. This one puts
+   your hands on it, and makes you feel what each lever costs.
+---------------------------------------------------------- */
+const RUN_BEATS = [
+  {
+    title: 'THE CITY HAS VITAL SIGNS',
+    body: 'Bottom left: what is moving, what is stuck, what is open and what has shipped. '
+        + 'Above them, the pulse is work landing over time — a flat line means nothing is '
+        + 'getting out. Point at any instrument to have it explain itself, or press X to '
+        + 'label everything at once.',
+    hold: 13,
+    aim: () => ({ x: 0, y: 30, s: 0.95 }),
+  },
+  {
+    title: 'STOP STARTING, START FINISHING',
+    body: 'This project has a lot in flight at once. Press ≡ WIP to cap it.',
+    afterTitle: 'THE EXCESS WENT BACK OUTSIDE',
+    after: 'The work over the cap drove back and parked at the kerb — least finished first. '
+         + 'None of it progresses while it sits there. Free a slot and the front of the queue pulls in.',
+    hold: 40,
+    interactive: true,
+    mark: (sim, org, aim) => aim.select.id,
+    done: (sim, org, id) => !!(org.byId[id] && org.byId[id].wip > 0),
+    aim: (sim, city, org) => {
+      const p = org.projects.slice().sort((a, b) => b.activeCount - a.activeCount)[0];
+      const b = p && city.byProject[p.id];
+      if (!b) return null;
+      return { x: b.x, y: b.y, s: 4.6, select: { type: 'project', id: p.id } };
+    },
+  },
+  {
+    title: 'THE VALVE ON NEW WORK',
+    body: 'Bottom left, above the pulse: this is how fast work enters the city at all. '
+        + 'Close it — drag it down, or press [ a few times — and watch the coast roads empty.',
+    afterTitle: 'THE GATES ARE CLOSING',
+    after: 'Nothing new is arriving now, so the backlog will drain. Open it past 100% and the '
+         + 'highways flood instead. It is the city\'s metabolism, and it is yours to set.',
+    hold: 40,
+    interactive: true,
+    done: (sim, org) => org.intake < 0.62,
+    aim: () => ({ x: 0, y: 30, s: 1.05 }),
+  },
+  {
+    title: 'SPEED IS BORROWED, NOT FREE',
+    body: 'This neighbourhood is under load. Press ◈ CRUNCH and everything here moves faster.',
+    afterTitle: 'MORALE JUST PAID FOR IT',
+    after: 'Watch the morale bar. It recovers slowly on its own, faster if you ☾ REST them — '
+         + 'which costs output while it lasts. Let it fall below a third and people leave the city.',
+    hold: 40,
+    interactive: true,
+    mark: (sim, org, aim) => org.teams[aim.select.id].morale,
+    done: (sim, org, was) => org.teams.some((t) => t.morale < was - 0.08),
+    aim: (sim, city, org) => {
+      const d = city.districts.slice().sort((a, b) => b.pressure - a.pressure)[0];
+      if (!d) return null;
+      return { x: d.cx, y: d.cy, s: 1.9, select: { type: 'team', id: d.team } };
+    },
+  },
+  {
+    title: 'SOMETHING IS DOWN',
+    body: 'A structure has failed. Everything inside it has stopped and responders are on '
+        + 'their way. Press ⚠ RESPOND to bring it back.',
+    afterTitle: 'BACK UP',
+    after: 'Ignore one for ninety seconds and it burns out on its own: a floor comes off the '
+         + 'tower, the milestone is un-shipped, the deadline pulls in, and the team wears it.',
+    hold: 40,
+    interactive: true,
+    setup: (sim, city, org) => {
+      if (org.incidents.length) return;
+      const p = org.projects.find((x) => !x.incident && x.progress > 0.1);
+      if (p) sim.startIncident(p);
+    },
+    mark: (sim, org) => (org.incidents[0] ? org.incidents[0].project : null),
+    done: (sim, org, id) => !id || !(org.byId[id] && org.byId[id].incident),
+    aim: (sim, city, org) => {
+      const inc = org.incidents[0];
+      const b = inc && city.byProject[inc.project];
+      if (!b) return null;
+      return { x: b.x, y: b.y, s: 4.4, select: { type: 'project', id: inc.project } };
+    },
+  },
+  {
+    title: 'YOU CAN LAY ROADS TOO',
+    body: 'Press ⇉ LINK, then click any other structure. A dependency is created and the road '
+        + 'is built between them, section by section.',
+    afterTitle: 'THE ROAD IS GOING IN',
+    after: 'A survey line runs ahead of the paving, and traffic uses it the moment it connects. '
+         + '✂ CUT demolishes one again and releases whatever was waiting on it.',
+    hold: 45,
+    interactive: true,
+    mark: (sim, org) => org.deps.length,
+    done: (sim, org, was) => org.deps.length > was,
+    aim: (sim, city, org) => {
+      const p = org.projects.slice().sort((a, b) => a.progress - b.progress)[0];
+      const b = p && city.byProject[p.id];
+      if (!b) return null;
+      return { x: b.x, y: b.y, s: 3.6, select: { type: 'project', id: p.id } };
+    },
+  },
+  {
+    title: 'EVERYTHING HAS A COST',
+    body: 'Nothing you press is free, and the city carries the consequence rather than '
+        + 'reporting it. Leave it alone and every effect wears off — it drifts back to its own '
+        + 'equilibrium without you. Shift+G replays this; G replays how to read it.',
+    hold: 13,
     aim: () => ({ x: 0, y: 30, s: 0.95 }),
   },
 ];

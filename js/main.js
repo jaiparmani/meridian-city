@@ -185,6 +185,8 @@ window.addEventListener('mousemove', (e) => {
     const node = ringAt(e.clientX, e.clientY);
     ui.ringHover = node ? node.index : -1;
     if (node) { ui.hover = null; canvas.style.cursor = node.ok ? 'pointer' : 'not-allowed'; return; }
+    ui.explainSpot = explain.at(e.clientX, e.clientY);
+    if (ui.explainSpot) { ui.hover = null; canvas.style.cursor = 'help'; return; }
     ui.hover = pickAt(e.clientX, e.clientY);
     canvas.style.cursor = ui.hover ? 'crosshair' : 'grab';
   }
@@ -263,8 +265,13 @@ window.addEventListener('keydown', (e) => {
   tour.poke();
   if (ui.loader && k !== 'escape' && k !== 'i') return;
   if (k === 'i') { openLoader(); return; }
-  if (k === 'g') { guide.active ? guide.stop(ui, sim) : guide.start(sim, city, org, ui); return; }
+  if (k === 'g') {
+    if (guide.active) guide.stop(ui, sim);
+    else guide.start(sim, city, org, ui, e.shiftKey ? 'run' : 'read');
+    return;
+  }
   if (k === 'escape') {
+    if (explain.mode) { explain.toggle(); return; }
     if (ui.loader) { openLoader(false); return; }
     if (guide.active) { guide.stop(ui, sim); return; }
     if (sim.linkFrom) { sim.linkFrom = null; sim.say('road cancelled', 200, true); return; }
@@ -277,6 +284,7 @@ window.addEventListener('keydown', (e) => {
   else if (k === 'f') toggleFollow();
   else if (k === 'r') { cam.tyaw = -0.52; }
   else if (k >= '1' && k <= '5') gotoLevel(+k - 1);
+  else if (k === 'x') { explain.toggle(); ui.explainSpot = null; }
   else if (k === 'm') sound.toggle();
   else if (k === ',') stepSpeed(-1);
   else if (k === '.') stepSpeed(1);
@@ -340,6 +348,7 @@ function guideBtnAt(mx, my) {
 
 function click(mx, my, wasRot) {
   if (wasRot) return;
+  if (explain.mode) { explain.toggle(); return; }
   if (soundAt(mx, my)) { sound.toggle(); return; }
   const sp = speedAt(mx, my);
   if (sp) { if (sp.pause) ui.paused = !ui.paused; else setSpeed(sp.val); return; }
@@ -347,6 +356,7 @@ function click(mx, my, wasRot) {
   const gb = guideBtnAt(mx, my);
   if (gb) {
     if (gb.action === 'skip') guide.stop(ui, sim);
+    else if (gb.action === 'run') { guide.stop(ui, sim); guide.start(sim, city, org, ui, 'run'); }
     else guide.advance(sim, city, org, ui);
     return;
   }
@@ -649,5 +659,5 @@ setTimeout(() => { cam.ts = 0.95; }, 300);
 
 /* expose the running city for inspection / automation */
 window.APP = { org, city, sim, cam, ui, hud, R, flyTo, gotoLevel, select, pickAt, ringAt,
-  rebuildFrom, tour, guide, persist, sound, setSpeed, stepSpeed,
+  rebuildFrom, tour, guide, persist, sound, explain, setSpeed, stepSpeed,
   get fps() { return fps; } };

@@ -30,6 +30,7 @@ class HUD {
 
   draw(ctx, sim, cam, ui, R, dt) {
     this.dt = dt;
+    this.explainDt = dt;
     this.boot = Math.min(1, this.boot + dt * 0.55);
     const W = cam.W, H = cam.H;
     this.W = W; this.H = H;
@@ -38,11 +39,15 @@ class HUD {
     ctx.lineJoin = 'round';
 
     const lod = lodOf(cam.s);
+    explain.reset();
+    const lit = 1 - (ui.tour ? ui.tour.fade : 0) * 0.9;
     this.radarSweep(ctx, sim, cam, R, lod);
     this.worldLabels(ctx, sim, cam, ui, R, lod, dt);
     this.chrome(ctx, sim, cam, ui, lod);
     this.detail(ctx, sim, cam, ui, R, dt);
     this.ticker(ctx, sim, cam, ui);
+    this.explainOverlay(ctx, sim, cam, ui);
+    this.explainHover(ctx, sim, cam, ui);
     this.guideCard(ctx, sim, cam, ui);
     this.linkMode(ctx, sim, cam, ui);
     this.tourCaption(ctx, sim, cam, ui);
@@ -324,6 +329,8 @@ class HUD {
     ctx.fillStyle = sim.weather.storm > 0.32 ? '#ff9a6a' : 'rgba(160,210,230,0.9)';
     ctx.fillText(`${wname}  ·  DEADLINE PRESSURE ${(stats.risk * 100).toFixed(0)}%`, 24, 92);
     ctx.restore();
+    explain.spot('org.name', 20, 22, 230, 44);
+    explain.spot('org.weather', 20, 68, 280, 32);
 
     /* top-centre: the zoom ladder you are standing on */
     ctx.save();
@@ -362,6 +369,7 @@ class HUD {
         ctx.fillRect(x - 1, 36, 2, 8);
       }
     }
+    explain.spot('ladder', x0, 18, total, 40);
     // altitude scale
     const alt = clamp(remap(Math.log(cam.s), Math.log(0.3), Math.log(28), 0, 1));
     ctx.fillStyle = 'rgba(255,255,255,0.10)';
@@ -391,6 +399,7 @@ class HUD {
     ctx.moveTo(rx + 14, yk); ctx.lineTo(rx + 22, yk - 5); ctx.lineTo(rx + 22, yk + 5);
     ctx.closePath(); ctx.fill();
     ctx.restore();
+    explain.spot('rail', rx - 14, ry0 - 10, 40, ry1 - ry0 + 20);
 
       }
 
@@ -415,6 +424,7 @@ class HUD {
     ctx.fillStyle = 'rgba(200,230,245,0.8)';
     ctx.fillText('N', Math.sin(cam.yaw) * 0 + 0, -28);
     ctx.restore();
+    explain.spot('compass', cx - 26, cy - 32, 52, 62);
 
     /* bottom-left: city pulse and the valve above it */
     this._compact = ui.compact;
@@ -480,6 +490,7 @@ class HUD {
     ctx.fillStyle = 'rgba(150,190,215,0.5)';
     ctx.fillText('drag  ·  [ ]', x, y + h + 12);
     ctx.restore();
+    explain.spot('intake', this.intakeBox[0], this.intakeBox[1], this.intakeBox[2], this.intakeBox[3]);
   }
 
   /* sound is off until asked for, and says so once */
@@ -528,6 +539,7 @@ class HUD {
       ctx.fillText(on ? 'SOUND ON' : 'SOUND OFF', x - 10, y + h / 2);
     }
     ctx.restore();
+    explain.spot('sound', this.soundBox[0], this.soundBox[1], this.soundBox[2], this.soundBox[3]);
   }
 
   /* the pieces a phone still gets: instruments, no chrome */
@@ -570,6 +582,7 @@ class HUD {
       ctx.textAlign = 'left';
       this.speedBoxes.push({ x: bx, y, w: cw - 2, h, val: vals[i], pause: i === 0 });
     }
+    explain.spot('time', x, y - 14, w, h + 16);
     if (!ui.paused && ui.speed !== 1) {
       ctx.font = `600 8px ${MONO}`;
       ctx.fillStyle = ui.speed > 1 ? '#ffc24d' : 'rgba(150,200,225,0.8)';
@@ -608,6 +621,7 @@ class HUD {
     ctx.strokeStyle = CY; ctx.lineWidth = 1.4; ctx.stroke();
     ctx.lineTo(x + w, y + h); ctx.lineTo(x, y + h); ctx.closePath();
     ctx.fillStyle = 'rgba(127,233,255,0.10)'; ctx.fill();
+    explain.spot('pulse', x, y - 14, w, h + 14);
 
     // counters
     ctx.textAlign = 'left';
@@ -618,8 +632,10 @@ class HUD {
       [stats.open, 'OPEN', '#7fe9ff'],
       [stats.shipped, 'SHIPPED', '#ffc24d'],
     ];
+    const KEYS = ['count.active', 'count.blocked', 'count.open', 'count.shipped'];
     cols.forEach(([v, label, col], i) => {
       const cx = x + 4 + i * 70;
+      explain.spot(KEYS[i], cx - 4, y + h + 6, 66, 32);
       ctx.fillStyle = col;
       ctx.fillText(String(v), cx, y + h + 20);
       ctx.font = `500 8px ${MONO}`;
@@ -702,6 +718,19 @@ class HUD {
     ctx.fillStyle = hsl(hue, 90, 70, 0.06);
     ctx.fillRect(0, sy, w, 18);
 
+    if (this.panelT > 0.85 && !ui.compact) {
+      const P = (lx, ly, lw, lh) => [px + lx, py + ly, lw, lh];
+      if (sel.type === 'project') {
+        const pr = org.byId[sel.id];
+        explain.spot('panel.milestones', ...P(14, 46, 150, h - 120));
+        explain.spot('panel.swarm', ...P(198, 52, 98, 100));
+        explain.spot('panel.deadline', ...P(10, h - 74, 140, 44));
+        explain.spot('panel.risk', ...P(176, h - 74, 72, 44));
+        if (pr && pr.wip) explain.spot('panel.wip', ...P(154, h - 40, 140, 22));
+      } else if (sel.type === 'team') {
+        explain.spot('panel.morale', ...P(10, h - 30, w - 20, 26));
+      }
+    }
     ctx.textAlign = 'left';
     if (sel.type === 'project') this.projectReadout(ctx, sim, org.byId[sel.id], hue, w, h);
     else if (sel.type === 'task') this.taskReadout(ctx, sim, org.byId[sel.id], hue, w, h);
@@ -1033,6 +1062,7 @@ class HUD {
     ctx.font = `500 9px ${MONO}`;
     ctx.fillStyle = 'rgba(150,195,220,0.55)';
     ctx.fillText('SIGNAL', x, y0 - 12);
+    explain.spot('feed', x - 4, y0 - 20, 280, 130);
     const list = sim.narration.slice(0, 9);
     list.forEach((n, i) => {
       const age = sim.time - n.t;
@@ -1050,6 +1080,157 @@ class HUD {
         ctx.fillText(n.text.length > 44 ? n.text.slice(0, 43) + '…' : n.text, x + 10, y);
       }
     });
+    ctx.restore();
+  }
+
+  /* one line about whatever you are pointing at */
+  explainHover(ctx, sim, cam, ui) {
+    if (explain.mode || ui.help || ui.loader) return;
+    const spot = ui.explainSpot;
+    if (!spot) return;
+    const txt = explain.text(spot.key);
+    if (!txt) return;
+    const [title, body] = txt;
+    const W = cam.W, H = cam.H;
+    ctx.save();
+    ctx.font = `500 10px ${MONO}`;
+    const maxW = Math.min(320, W - 40);
+    const lines = this.wrap(ctx, body, maxW - 24);
+    const bw = maxW, bh = 22 + lines.length * 14 + 10;
+    let bx = clamp(spot.x + spot.w / 2 - bw / 2, 12, W - bw - 12);
+    let by = spot.y - bh - 10;
+    if (by < 12) by = Math.min(spot.y + spot.h + 10, H - bh - 12);
+    // a bracket on the thing itself
+    ctx.strokeStyle = 'rgba(127,233,255,0.55)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(spot.x + 0.5, spot.y + 0.5, spot.w, spot.h);
+    roundRectPath(ctx, bx, by, bw, bh, 3);
+    ctx.fillStyle = 'rgba(6,16,24,0.96)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(127,233,255,0.45)';
+    ctx.stroke();
+    ctx.textAlign = 'left';
+    ctx.font = `700 10px ${MONO}`;
+    ctx.fillStyle = CY;
+    ctx.fillText(title, bx + 12, by + 15);
+    ctx.font = `500 10px ${MONO}`;
+    ctx.fillStyle = 'rgba(205,232,246,0.92)';
+    lines.forEach((ln, i) => ctx.fillText(ln, bx + 12, by + 31 + i * 14));
+    ctx.restore();
+  }
+
+  /* hold the whole interface up to the light */
+  explainOverlay(ctx, sim, cam, ui) {
+    explain.update(this.dt || 0.016);
+    if (explain.fade < 0.02) return;
+    const a = easeOut(explain.fade);
+    const W = cam.W, H = cam.H;
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(2,7,12,0.62)';
+    ctx.fillRect(0, 0, W, H);
+
+    // a few things in the world, so the city itself is labelled too
+    const world = [];
+    const push = (key, x, y) => {
+      if (x > 30 && x < W - 30 && y > 40 && y < H - 40) world.push({ key, x, y, w: 2, h: 2, world: true });
+    };
+    const core = cam.proj(0, 0, 60, {});
+    push('w.core', core.x, core.y);
+    let best = null, bd = Infinity;
+    for (const b of sim.city.buildings) {
+      const p = cam.proj(b.x, b.y, buildingHeight(b) * 0.6, {});
+      const d = dist2(p.x, p.y, W * 0.5, H * 0.5);
+      if (d < bd) { bd = d; best = { p, b }; }
+    }
+    if (best) push('w.building', best.p.x, best.p.y);
+    let ba = null, bad = Infinity;
+    for (const ag of sim.agents) {
+      if (ag.resident || ag.dead) continue;
+      const p = cam.proj(ag.x, ag.y, 3, {});
+      const d = dist2(p.x, p.y, W * 0.5, H * 0.6);
+      if (d < bad) { bad = d; ba = p; }
+    }
+    if (ba) push('w.agent', ba.x, ba.y);
+    let be = null, bed = Infinity;
+    for (const e of sim.city.edges) {
+      if (!e.deps.length) continue;
+      const na = sim.city.nodes[e.a], nb = sim.city.nodes[e.b];
+      const p = cam.proj((na.x + nb.x) / 2, (na.y + nb.y) / 2, 0, {});
+      const d = dist2(p.x, p.y, W * 0.5, H * 0.75);
+      if (d < bed) { bed = d; be = p; }
+    }
+    if (be) push('w.road', be.x, be.y);
+    const dd = sim.city.districts.slice().sort((x, y) => y.pressure - x.pressure)[0];
+    if (dd) { const p = cam.proj(dd.cx, dd.cy, 20, {}); push('w.district', p.x, p.y); }
+
+    const all = explain.spots.concat(ui.compact ? [] : world);
+
+    /* lay the labels out in two gutters, like an exploded diagram,
+       so nothing ever lands on top of anything else */
+    ctx.font = `500 9px ${MONO}`;
+    const bw = ui.compact ? Math.min(210, W - 24) : 208;
+    const measured = all.map((sp) => {
+      const txt = explain.text(sp.key);
+      const lines = this.wrap(ctx, txt[1], bw - 18).slice(0, 5);
+      return { sp, title: txt[0], lines, bh: 15 + lines.length * 11 + 7,
+        cx: sp.x + sp.w / 2, cy: sp.y + sp.h / 2 };
+    });
+    const left = measured.filter((m) => m.cx < W * 0.5).sort((a, b) => a.cy - b.cy);
+    const right = measured.filter((m) => m.cx >= W * 0.5).sort((a, b) => a.cy - b.cy);
+
+    const place = (col, gutterX) => {
+      const gap = 7;
+      let total = col.reduce((n, m) => n + m.bh + gap, 0);
+      const top = 46, bottom = H - 34;
+      const avail = bottom - top;
+      // if the column is over-full, tighten the gaps rather than overlap
+      const squeeze = total > avail ? (avail - col.reduce((n, m) => n + m.bh, 0)) / Math.max(1, col.length) : gap;
+      let y = top;
+      if (total < avail) y = top + (avail - total) * 0.12;
+      for (const m of col) {
+        m.bx = gutterX;
+        m.by = clamp(y, top, bottom - m.bh);
+        y = m.by + m.bh + Math.max(2, squeeze);
+      }
+    };
+    place(left, 14);
+    place(right, W - bw - 14);
+    explain.lastDrawn = measured.length;
+
+    for (const m of measured) {
+      const world$ = !!m.sp.world;
+      const toRight = m.bx < W * 0.5;
+      const anchorX = toRight ? m.bx + bw : m.bx;
+      const anchorY = m.by + m.bh / 2;
+      ctx.strokeStyle = world$ ? 'rgba(255,194,77,0.65)' : 'rgba(127,233,255,0.5)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(anchorX, anchorY);
+      ctx.lineTo(anchorX + (toRight ? 12 : -12), anchorY);
+      ctx.lineTo(m.cx, m.cy);
+      ctx.stroke();
+      if (world$) { ctx.beginPath(); ctx.arc(m.cx, m.cy, 4, 0, TAU); ctx.stroke(); }
+      else ctx.strokeRect(m.sp.x + 0.5, m.sp.y + 0.5, m.sp.w, m.sp.h);
+
+      roundRectPath(ctx, m.bx, m.by, bw, m.bh, 2);
+      ctx.fillStyle = 'rgba(5,14,22,0.97)';
+      ctx.fill();
+      ctx.strokeStyle = world$ ? 'rgba(255,194,77,0.45)' : 'rgba(127,233,255,0.35)';
+      ctx.stroke();
+      ctx.textAlign = 'left';
+      ctx.font = `700 9px ${MONO}`;
+      ctx.fillStyle = world$ ? AM : CY;
+      ctx.fillText(m.title, m.bx + 9, m.by + 11);
+      ctx.font = `500 9px ${MONO}`;
+      ctx.fillStyle = 'rgba(200,228,244,0.9)';
+      m.lines.forEach((ln, i) => ctx.fillText(ln, m.bx + 9, m.by + 24 + i * 11));
+    }
+
+    ctx.textAlign = 'center';
+    ctx.font = `700 11px ${MONO}`;
+    ctx.fillStyle = CY;
+    ctx.fillText('EXPLAIN  ·  X TO CLOSE', W / 2, H - 18);
     ctx.restore();
   }
 
@@ -1086,9 +1267,10 @@ class HUD {
     ctx.textAlign = 'left';
     ctx.font = `600 ${touch ? 11 : 9}px ${MONO}`;
     ctx.fillStyle = CY;
-    ctx.fillText(`WALKTHROUGH  ${g.step + 1} / ${BEATS.length}`, 24, bar * 0.5);
+    const script = g.script || BEATS;
+    ctx.fillText(`${g.which === 'run' ? 'RUNNING THE CITY' : 'WALKTHROUGH'}  ${g.step + 1} / ${script.length}`, 24, bar * 0.5);
     // progress pips
-    for (let i = 0; i < BEATS.length; i++) {
+    for (let i = 0; i < script.length; i++) {
       const px = 190 + i * 14;
       ctx.fillStyle = i <= g.step ? CY : 'rgba(140,190,215,0.28)';
       ctx.fillRect(px, bar * 0.5 - 1.5, 9, 3);
@@ -1147,6 +1329,12 @@ class HUD {
       return bx - 10;
     };
     let x = cx + cw - pad;
+    if (g.offer === 'run' && !g.waiting) {
+      x = mk('SHOW ME HOW TO RUN IT ›', 'run', x, true);
+      mk('DONE', 'skip', x, false);
+      ctx.restore();
+      return;
+    }
     if (g.waiting) {
       const puls = 0.55 + 0.45 * Math.sin(sim.time * 4);
       ctx.font = `700 ${touch ? 12 : 10}px ${MONO}`;
@@ -1317,7 +1505,7 @@ class HUD {
   }
 
   helpCard(ctx, cam) {
-    const w = 440, h = 320, x = cam.W / 2 - w / 2, y = cam.H / 2 - h / 2;
+    const w = 450, h = 350, x = cam.W / 2 - w / 2, y = cam.H / 2 - h / 2;
     ctx.save();
     roundRectPath(ctx, x, y, w, h, 4);
     ctx.fillStyle = 'rgba(6,14,22,0.92)'; ctx.fill();
@@ -1348,6 +1536,8 @@ class HUD {
       ['SPACE / 1-5', 'hold time · jump to an altitude'],
       ['G / I', 'replay the walkthrough · load your own work'],
       ['M', 'sound — the city is synthesised, not recorded'],
+      ['X', 'label everything on screen'],
+      ['G / SHIFT+G', 'how to read the city · how to run it'],
     ];
     rows.forEach(([k, v], i) => {
       const yy = y + 54 + i * 13.5;
