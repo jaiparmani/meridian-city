@@ -43,6 +43,7 @@ class HUD {
     this.chrome(ctx, sim, cam, ui, lod);
     this.detail(ctx, sim, cam, ui, R, dt);
     this.ticker(ctx, sim, cam, ui);
+    this.guideCard(ctx, sim, cam, ui);
     this.linkMode(ctx, sim, cam, ui);
     this.tourCaption(ctx, sim, cam, ui);
     this.incidents(ctx, sim, cam, ui);
@@ -299,7 +300,9 @@ class HUD {
     const W = cam.W, H = cam.H, org = sim.org;
     const stats = orgStats(org);
     // while the city is touring itself the instruments step back
-    const b = easeOut(this.boot) * (1 - (ui.tour ? ui.tour.fade : 0) * 0.88);
+    const b = easeOut(this.boot)
+      * (1 - (ui.tour ? ui.tour.fade : 0) * 0.88)
+      * (1 - (ui.guide ? ui.guide.fade : 0) * 0.7);
     if (b < 0.02) return;
 
     /* top-left: identity + clock */
@@ -328,6 +331,19 @@ class HUD {
     ctx.textAlign = 'center';
     ctx.font = `600 10px ${MONO}`;
     const names = LOD_NAME;
+    if (ui.compact) {
+      ctx.font = `700 11px ${MONO}`;
+      ctx.fillStyle = '#eaf8ff';
+      ctx.fillText(names[lod], W / 2, 22);
+      const alt0 = clamp(remap(Math.log(cam.s), Math.log(0.3), Math.log(28), 0, 1));
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.fillRect(W / 2 - 70, 32, 140, 2);
+      ctx.fillStyle = AM;
+      ctx.fillRect(W / 2 - 70 + 140 * alt0 - 1, 29, 2, 8);
+      ctx.restore();
+      this.rightRail(ctx, sim, cam, ui, lod, b);
+      return;
+    }
     const total = 460, x0 = W / 2 - total / 2;
     for (let i = 0; i < names.length; i++) {
       const x = x0 + (i + 0.5) * (total / names.length);
@@ -354,6 +370,7 @@ class HUD {
     ctx.restore();
 
     /* right: vertical zoom rail */
+    if (!ui.compact) {
     ctx.save();
     ctx.globalAlpha = b * 0.9;
     const rx = W - 34, ry0 = 120, ry1 = H - 190;
@@ -374,8 +391,9 @@ class HUD {
     ctx.closePath(); ctx.fill();
     ctx.restore();
 
-    /* compass */
-    const cx = W - 62, cy = 74;
+      }
+  /* compass */
+    const cx = W - 62, cy = ui.compact ? 60 : 74;
     ctx.save();
     ctx.globalAlpha = b * 0.85;
     ctx.translate(cx, cy);
@@ -394,10 +412,13 @@ class HUD {
     ctx.restore();
 
     /* bottom-left: city pulse and the valve above it */
+    this._compact = ui.compact;
     this.pulse(ctx, sim, cam, stats, b);
     this.intake(ctx, sim, cam, b);
+    this.clockControl(ctx, sim, cam, ui, b);
 
     /* bottom-right: legend */
+    if (ui.compact) { ctx.restore(); return; }
     ctx.save();
     ctx.globalAlpha = b * 0.8;
     ctx.textAlign = 'right';
@@ -417,7 +438,9 @@ class HUD {
   /* the valve on new work — an instrument, not a form control */
   intake(ctx, sim, cam, b) {
     const org = sim.org;
-    const x = 24, y = cam.H - 142, w = 260, h = 8;
+    const compact = this._compact;
+    const x = 24, y = cam.H - (compact ? 132 : 142),
+      w = compact ? Math.min(200, cam.W - 48) : 260, h = compact ? 12 : 8;
     this.intakeBox = [x - 6, y - 20, w + 12, h + 32];
     ctx.save();
     ctx.globalAlpha = b;
@@ -454,9 +477,58 @@ class HUD {
     ctx.restore();
   }
 
+  /* the pieces a phone still gets: instruments, no chrome */
+  rightRail(ctx, sim, cam, ui, lod, b) {
+    const stats = orgStats(sim.org);
+    this._compact = ui.compact;
+    this.pulse(ctx, sim, cam, stats, b);
+    this.intake(ctx, sim, cam, b);
+    this.clockControl(ctx, sim, cam, ui, b);
+  }
+
+  /* time: hold it, slow it, or run it hot */
+  clockControl(ctx, sim, cam, ui, b) {
+    const w = ui.compact ? 150 : 176;
+    const x = 24, y = cam.H - (ui.compact ? 196 : 178), h = ui.compact ? 22 : 18;
+    this.speedBoxes = [];
+    ctx.save();
+    ctx.globalAlpha = b;
+    ctx.textAlign = 'left';
+    ctx.font = `600 9px ${MONO}`;
+    ctx.fillStyle = 'rgba(160,205,230,0.65)';
+    ctx.fillText('TIME', x, y - 7);
+    const labels = ['⏸', '¼', '½', '1', '2', '4'];
+    const vals = [0, 0.25, 0.5, 1, 2, 4];
+    const cw = w / labels.length;
+    for (let i = 0; i < labels.length; i++) {
+      const bx = x + i * cw;
+      const on = i === 0 ? ui.paused : (!ui.paused && ui.speed === vals[i]);
+      ctx.fillStyle = on ? 'rgba(127,233,255,0.9)' : 'rgba(255,255,255,0.07)';
+      ctx.fillRect(bx, y, cw - 2, h);
+      if (!on) {
+        ctx.strokeStyle = 'rgba(140,190,215,0.22)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(bx + 0.5, y + 0.5, cw - 3, h - 1);
+      }
+      ctx.fillStyle = on ? '#04121a' : 'rgba(190,220,238,0.8)';
+      ctx.font = `${on ? 700 : 500} ${ui.compact ? 11 : 10}px ${MONO}`;
+      ctx.textAlign = 'center';
+      ctx.fillText(labels[i], bx + (cw - 2) / 2, y + h / 2 + 0.5);
+      ctx.textAlign = 'left';
+      this.speedBoxes.push({ x: bx, y, w: cw - 2, h, val: vals[i], pause: i === 0 });
+    }
+    if (!ui.paused && ui.speed !== 1) {
+      ctx.font = `600 8px ${MONO}`;
+      ctx.fillStyle = ui.speed > 1 ? '#ffc24d' : 'rgba(150,200,225,0.8)';
+      ctx.fillText(ui.speed > 1 ? 'RUNNING HOT' : 'SLOWED', x + w + 8, y + h / 2);
+    }
+    ctx.restore();
+  }
+
   pulse(ctx, sim, cam, stats, b) {
     const H = cam.H;
-    const x = 24, y = H - 96, w = 260, h = 54;
+    const compact = this._compact;
+    const x = 24, y = H - 96, w = compact ? Math.min(200, cam.W - 48) : 260, h = compact ? 34 : 54;
     ctx.save();
     ctx.globalAlpha = b;
     ctx.font = `600 9px ${MONO}`;
@@ -529,10 +601,14 @@ class HUD {
     }
 
     const t = easeOut(this.panelT);
-    const w = 300, h = sel.type === 'project' ? 250 : sel.type === 'team' ? 210 : 190;
-    const leftRoom = anchor.x > cam.W * 0.55;
-    let px = clamp(leftRoom ? anchor.x - w - 46 : anchor.x + 46, 20, cam.W - w - 20);
-    let py = clamp(anchor.y - h * 0.5, 76, cam.H - h - 130);
+    const compact = ui.compact;
+    const w = compact ? Math.min(300, cam.W - 24) : 300;
+    const h = sel.type === 'project' ? 250 : sel.type === 'team' ? 210 : 190;
+    // on a phone it sits at the top, clear of both the ring and the instruments
+    const leftRoom = compact ? false : anchor.x > cam.W * 0.55;
+    let px = compact ? (cam.W - w) / 2
+      : clamp(leftRoom ? anchor.x - w - 46 : anchor.x + 46, 20, cam.W - w - 20);
+    let py = compact ? 54 : clamp(anchor.y - h * 0.5, 76, cam.H - h - 130);
 
     this.panelBox = [px - 12, py - 10, w + 24, h + 20];
     this.commandRing(ctx, sim, ui, anchor, hue, leftRoom, dt, t);
@@ -591,8 +667,11 @@ class HUD {
     if (!acts.length || this.ringT < 0.02) return;
 
     const n = acts.length;
-    const R = 92;
-    const centre = panelLeft ? 0 : PI;      // fan away from the readout
+    const big = ui.touch || ui.compact;
+    const R = big ? 116 : 92;
+    // fan away from the readout: sideways normally, down and to the
+    // right on a phone, where the readout is pinned across the top
+    const centre = ui.compact ? PI * 0.15 : (panelLeft ? 0 : PI);
     const spread = Math.min(2.0, 0.52 * (n - 1));
     ctx.save();
     for (let i = 0; i < n; i++) {
@@ -609,9 +688,9 @@ class HUD {
       const rr2 = R * g * (1 + ht * 0.09);
       const x = anchor.x + Math.cos(ang) * rr2;
       const y = anchor.y + Math.sin(ang) * rr2 * 0.86;
-      const rad = 17 + ht * 3.5;
+      const rad = (big ? 22 : 17) + ht * 3.5;
       const live = ok && cool <= 0;
-      this.ringNodes.push({ x, y, r: rad + 5, def, ok: live, index: i });
+      this.ringNodes.push({ x, y, r: rad + (big ? 12 : 5), def, ok: live, index: i });
       if (g < 0.05) continue;
 
       // spoke
@@ -891,8 +970,9 @@ class HUD {
 
   /* ---- event ticker ------------------------------------- */
   ticker(ctx, sim, cam, ui) {
+    if (ui.compact) return;                    // no room for a feed on a phone
     const x = 24, y0 = 128;
-    const dim = 1 - (ui.tour ? ui.tour.fade : 0) * 0.9;
+    const dim = (1 - (ui.tour ? ui.tour.fade : 0) * 0.9) * (1 - (ui.guide ? ui.guide.fade : 0));
     if (dim < 0.02) return;
     ctx.save();
     ctx.globalAlpha = easeOut(this.boot) * 0.95 * dim;
@@ -917,6 +997,113 @@ class HUD {
         ctx.fillText(n.text.length > 44 ? n.text.slice(0, 43) + '…' : n.text, x + 10, y);
       }
     });
+    ctx.restore();
+  }
+
+  wrap(ctx, text, maxW) {
+    const words = String(text).split(' ');
+    const lines = [];
+    let line = '';
+    for (const w of words) {
+      const test = line ? line + ' ' + w : w;
+      if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; }
+      else line = test;
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+
+  /* the walkthrough: a card that explains what you are looking at */
+  guideCard(ctx, sim, cam, ui) {
+    const g = ui.guide;
+    if (!g || g.fade < 0.02) { if (g) g.buttons = []; return; }
+    const a = easeOut(g.fade);
+    const W = cam.W, H = cam.H;
+    const touch = ui.touch;
+    ctx.save();
+    ctx.globalAlpha = a;
+
+    // letterbox, so it reads as a set piece rather than a popup
+    const bar = 40 * a;
+    ctx.fillStyle = 'rgba(2,7,12,0.96)';
+    ctx.fillRect(0, 0, W, bar);
+    ctx.strokeStyle = 'rgba(127,233,255,0.22)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, bar + 0.5); ctx.lineTo(W, bar + 0.5); ctx.stroke();
+    ctx.textAlign = 'left';
+    ctx.font = `600 ${touch ? 11 : 9}px ${MONO}`;
+    ctx.fillStyle = CY;
+    ctx.fillText(`WALKTHROUGH  ${g.step + 1} / ${BEATS.length}`, 24, bar * 0.5);
+    // progress pips
+    for (let i = 0; i < BEATS.length; i++) {
+      const px = 190 + i * 14;
+      ctx.fillStyle = i <= g.step ? CY : 'rgba(140,190,215,0.28)';
+      ctx.fillRect(px, bar * 0.5 - 1.5, 9, 3);
+    }
+
+    /* the card */
+    const cw = Math.min(touch ? W - 32 : 560, W - 48);
+    const pad = touch ? 20 : 22;
+    ctx.font = `500 ${touch ? 13 : 11.5}px ${MONO}`;
+    const lines = this.wrap(ctx, g.body || '', cw - pad * 2);
+    const lineH = touch ? 20 : 17;
+    const ch = pad + (touch ? 22 : 19) + 10 + lines.length * lineH + pad + 30;
+    const cx = W / 2 - cw / 2;
+    const cy = H - ch - (touch ? 26 : 34);
+
+    roundRectPath(ctx, cx, cy, cw, ch, 3);
+    ctx.fillStyle = 'rgba(6,16,24,0.94)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(127,233,255,0.42)';
+    ctx.lineWidth = 1; ctx.stroke();
+    // corner brackets
+    ctx.strokeStyle = CY; ctx.lineWidth = 2;
+    const L = 16;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy + L); ctx.lineTo(cx, cy); ctx.lineTo(cx + L, cy);
+    ctx.moveTo(cx + cw - L, cy + ch); ctx.lineTo(cx + cw, cy + ch); ctx.lineTo(cx + cw, cy + ch - L);
+    ctx.stroke();
+
+    ctx.textAlign = 'left';
+    ctx.font = `700 ${touch ? 15 : 13}px ${MONO}`;
+    ctx.fillStyle = '#eaf8ff';
+    ctx.fillText(g.title || '', cx + pad, cy + pad + (touch ? 8 : 6));
+    ctx.font = `500 ${touch ? 13 : 11.5}px ${MONO}`;
+    ctx.fillStyle = 'rgba(205,232,246,0.9)';
+    lines.forEach((ln, i) => {
+      ctx.fillText(ln, cx + pad, cy + pad + (touch ? 34 : 30) + i * lineH);
+    });
+
+    /* buttons */
+    g.buttons = [];
+    const by = cy + ch - (touch ? 26 : 24);
+    const mk = (label, action, x, primary) => {
+      ctx.font = `600 ${touch ? 12 : 10}px ${MONO}`;
+      const w = ctx.measureText(label).width + (touch ? 30 : 24);
+      const h = touch ? 30 : 24;
+      const bx = x - w;
+      roundRectPath(ctx, bx, by - h / 2, w, h, 2);
+      ctx.fillStyle = primary ? 'rgba(127,233,255,0.92)' : 'rgba(255,255,255,0.06)';
+      ctx.fill();
+      if (!primary) { ctx.strokeStyle = 'rgba(150,200,225,0.4)'; ctx.lineWidth = 1; ctx.stroke(); }
+      ctx.fillStyle = primary ? '#04121a' : 'rgba(200,228,244,0.9)';
+      ctx.textAlign = 'center';
+      ctx.fillText(label, bx + w / 2, by);
+      ctx.textAlign = 'left';
+      g.buttons.push({ x: bx, y: by - h / 2, w, h, action });
+      return bx - 10;
+    };
+    let x = cx + cw - pad;
+    if (g.waiting) {
+      const puls = 0.55 + 0.45 * Math.sin(sim.time * 4);
+      ctx.font = `700 ${touch ? 12 : 10}px ${MONO}`;
+      ctx.fillStyle = `rgba(255,194,77,${puls})`;
+      ctx.fillText('◉ WAITING FOR YOU', cx + pad, by);
+      x = mk('SKIP THIS', 'next', x, false);
+    } else {
+      x = mk('NEXT ›', 'next', x, true);
+    }
+    mk('SKIP TOUR', 'skip', x, false);
     ctx.restore();
   }
 
@@ -1106,6 +1293,7 @@ class HUD {
       ['CLICK / ESC', 'descend into · ascend out of'],
       ['F', 'lock the camera onto a moving task'],
       ['SPACE / 1-5', 'hold time · jump to an altitude'],
+      ['G / I', 'replay the walkthrough · load your own work'],
     ];
     rows.forEach(([k, v], i) => {
       const yy = y + 54 + i * 13.5;

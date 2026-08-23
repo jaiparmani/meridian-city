@@ -17,7 +17,18 @@ const ui = {
   selected: null, hover: null, focusTeam: null,
   help: false, paused: false, hotDeps: null, level: LOD.ORG,
   ringHover: -1,
+  speed: 1, touch: false, compact: false,
 };
+const SPEEDS = [0.25, 0.5, 1, 2, 4];
+function setSpeed(v) {
+  ui.speed = clamp(v, 0.25, 4);
+  ui.paused = false;
+}
+function stepSpeed(dir) {
+  const i = SPEEDS.indexOf(ui.speed);
+  const j = clamp((i < 0 ? 2 : i) + dir, 0, SPEEDS.length - 1);
+  setSpeed(SPEEDS[j]);
+}
 
 /* structures rise out of the ground on a wave from downtown */
 function seedGrowth(c) {
@@ -74,6 +85,8 @@ let DPR = 1;
 function resize() {
   DPR = Math.min(2, window.devicePixelRatio || 1);
   const w = window.innerWidth, h = window.innerHeight;
+  ui.touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+  ui.compact = w < 780 || h < 520;
   canvas.width = Math.floor(w * DPR); canvas.height = Math.floor(h * DPR);
   canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
   R.ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
@@ -91,6 +104,13 @@ cam.radiusHint = city.radius * 1.6;
 /* ---------- input ---------------------------------------- */
 let drag = null, zoomAnchor = null, lastMouse = { x: 0, y: 0 }, moved = 0;
 
+function speedAt(mx, my) {
+  const list = hud.speedBoxes || [];
+  for (const b of list) {
+    if (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h) return b;
+  }
+  return null;
+}
 function inIntake(mx, my) {
   const b = hud.intakeBox;
   return b && mx >= b[0] && mx <= b[0] + b[2] && my >= b[1] && my <= b[1] + b[3];
@@ -103,6 +123,12 @@ function setIntakeFrom(mx) {
 
 canvas.addEventListener('mousedown', (e) => {
   tour.poke();
+  const sp = speedAt(e.clientX, e.clientY);
+  if (sp) {
+    if (sp.pause) ui.paused = !ui.paused; else setSpeed(sp.val);
+    drag = { consumed: true };
+    return;
+  }
   if (inIntake(e.clientX, e.clientY)) {
     drag = { intake: true };
     setIntakeFrom(e.clientX);
@@ -117,6 +143,7 @@ window.addEventListener('mousemove', (e) => {
   if (Math.abs(e.clientX - lastMouse.x) + Math.abs(e.clientY - lastMouse.y) > 3) tour.poke();
   lastMouse.x = e.clientX; lastMouse.y = e.clientY;
   ui.mouse = lastMouse;
+  if (drag && drag.consumed) return;
   if (drag && drag.intake) { setIntakeFrom(e.clientX); return; }
   if (drag) {
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
@@ -134,6 +161,11 @@ window.addEventListener('mousemove', (e) => {
     }
     drag.x = e.clientX; drag.y = e.clientY;
   } else {
+    if (guideBtnAt(e.clientX, e.clientY)) {
+      ui.hover = null; ui.ringHover = -1;
+      canvas.style.cursor = 'pointer';
+      return;
+    }
     if (inIntake(e.clientX, e.clientY)) {
       ui.hover = null; ui.ringHover = -1;
       canvas.style.cursor = 'ew-resize';
@@ -147,6 +179,7 @@ window.addEventListener('mousemove', (e) => {
   }
 });
 window.addEventListener('mouseup', (e) => {
+  if (drag && drag.consumed) { drag = null; return; }
   if (drag && drag.intake) { drag = null; return; }
   if (drag) {
     if (moved < 5) click(e.clientX, e.clientY, drag.rot);
@@ -179,7 +212,10 @@ canvas.addEventListener('wheel', (e) => {
 let touch = null;
 canvas.addEventListener('touchstart', (e) => {
   tour.poke();
-  if (e.touches.length === 1) touch = { x: e.touches[0].clientX, y: e.touches[0].clientY, d: 0 };
+  if (e.touches.length === 1) touch = {
+    x: e.touches[0].clientX, y: e.touches[0].clientY, d: 0,
+    sx: e.touches[0].clientX, sy: e.touches[0].clientY, t0: performance.now(), moved: 0,
+  };
   else if (e.touches.length === 2) {
     const [a, b] = e.touches;
     touch = { pinch: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 };
@@ -190,6 +226,7 @@ canvas.addEventListener('touchmove', (e) => {
   if (!touch) return;
   if (e.touches.length === 1) {
     const dx = e.touches[0].clientX - touch.x, dy = e.touches[0].clientY - touch.y;
+    touch.moved = (touch.moved || 0) + Math.abs(dx) + Math.abs(dy);
     const k = 1 / cam.s, wx = dx * k, wy = (dy * k) / PITCH;
     const c = Math.cos(-cam.yaw), s = Math.sin(-cam.yaw);
     cam.tx -= wx * c - wy * s; cam.ty -= wx * s + wy * c;
@@ -202,15 +239,23 @@ canvas.addEventListener('touchmove', (e) => {
     touch.pinch = d;
   }
 }, { passive: false });
-canvas.addEventListener('touchend', () => { touch = null; });
+canvas.addEventListener('touchend', (e) => {
+  // a short touch that did not travel is a tap: treat it as a click
+  if (touch && touch.t0 && (touch.moved || 0) < 14 && performance.now() - touch.t0 < 420) {
+    click(touch.sx, touch.sy, false);
+  }
+  touch = null;
+});
 
 window.addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
   tour.poke();
   if (ui.loader && k !== 'escape' && k !== 'i') return;
   if (k === 'i') { openLoader(); return; }
+  if (k === 'g') { guide.active ? guide.stop(ui, sim) : guide.start(sim, city, org, ui); return; }
   if (k === 'escape') {
     if (ui.loader) { openLoader(false); return; }
+    if (guide.active) { guide.stop(ui, sim); return; }
     if (sim.linkFrom) { sim.linkFrom = null; sim.say('road cancelled', 200, true); return; }
     ascend();
   }
@@ -221,6 +266,8 @@ window.addEventListener('keydown', (e) => {
   else if (k === 'f') toggleFollow();
   else if (k === 'r') { cam.tyaw = -0.52; }
   else if (k >= '1' && k <= '5') gotoLevel(+k - 1);
+  else if (k === ',') stepSpeed(-1);
+  else if (k === '.') stepSpeed(1);
   else if (k === '[') org.intake = clamp(org.intake - 0.2, 0, 2);
   else if (k === ']') org.intake = clamp(org.intake + 0.2, 0, 2);
   else if (k === '+' || k === '=') cam.ts = clamp(cam.ts * 1.35, 0.22, 34);
@@ -271,8 +318,25 @@ function ringAt(mx, my) {
   return null;
 }
 
+function guideBtnAt(mx, my) {
+  if (!guide.active) return null;
+  for (const b of guide.buttons) {
+    if (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h) return b;
+  }
+  return null;
+}
+
 function click(mx, my, wasRot) {
   if (wasRot) return;
+  const sp = speedAt(mx, my);
+  if (sp) { if (sp.pause) ui.paused = !ui.paused; else setSpeed(sp.val); return; }
+  if (inIntake(mx, my)) { setIntakeFrom(mx); return; }
+  const gb = guideBtnAt(mx, my);
+  if (gb) {
+    if (gb.action === 'skip') guide.stop(ui, sim);
+    else guide.advance(sim, city, org, ui);
+    return;
+  }
   const node = ringAt(mx, my);
   if (node) {
     if (runAction(sim, ui.selected, node.def)) cam.shake = Math.max(cam.shake, 0.12);
@@ -520,8 +584,19 @@ function frame(now) {
   fpsAcc += dt; fpsN++;
   if (fpsAcc > 0.5) { fps = fpsN / fpsAcc; fpsAcc = 0; fpsN = 0; }
 
-  sim.speed = ui.paused ? 0 : 1;
-  sim.step(dt);
+  // fast-forward by taking more small steps, never bigger ones —
+  // one huge dt would let vehicles jump straight over junctions
+  if (ui.paused) {
+    sim.speed = 0;
+    sim.step(dt);
+  } else if (ui.speed >= 1) {
+    const steps = Math.round(ui.speed);
+    sim.speed = 1;
+    for (let i = 0; i < steps; i++) sim.step(dt);
+  } else {
+    sim.speed = ui.speed;
+    sim.step(dt);
+  }
 
   cam.update(dt, sim.time);
   // keep the point under the cursor pinned while zooming
@@ -536,8 +611,11 @@ function frame(now) {
   if (sim.weather.flash > 0.9) cam.shake = Math.max(cam.shake, 0.35 * sim.weather.storm);
 
   persist.tick(dt, org);
-  tour.update(dt, sim, city, org, ui);
+  guide.update(dt, sim, city, org, ui);
+  if (!guide.active) tour.update(dt, sim, city, org, ui);
+  ui.guide = guide;
   ui.tour = tour;
+  cam.tPanY = (ui.compact && ui.selected) ? 120 : 0;
   ui.level = lodOf(cam.s);
   R.draw(sim, cam, ui, dt);
   hud.draw(R.ctx, sim, cam, ui, R, dt);
@@ -546,10 +624,15 @@ function frame(now) {
 }
 requestAnimationFrame(frame);
 
+/* a first-time visitor gets shown around */
+setTimeout(() => {
+  if (!guide.seen() && !ui.loader) guide.start(sim, city, org, ui);
+}, 3200);
+
 /* first breath: let the city assemble, then settle */
 setTimeout(() => { cam.ts = 0.95; }, 300);
 
 /* expose the running city for inspection / automation */
 window.APP = { org, city, sim, cam, ui, hud, R, flyTo, gotoLevel, select, pickAt, ringAt,
-  rebuildFrom, tour,
+  rebuildFrom, tour, guide, persist, setSpeed, stepSpeed,
   get fps() { return fps; } };

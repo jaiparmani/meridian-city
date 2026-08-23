@@ -21,6 +21,7 @@ const LOD_NAME = ['ORGANISATION', 'NEIGHBOURHOOD', 'PROJECT', 'TASK', 'ACTIVITY'
 class Camera {
   constructor() {
     this.x = 0; this.y = 0; this.s = 0.55; this.yaw = -0.5;
+    this.panY = 0; this.tPanY = 0;
     this.tx = 0; this.ty = 0; this.ts = 0.9; this.tyaw = -0.5;
     this.vx = 0; this.vy = 0;
     this.shake = 0; this.follow = null;
@@ -69,8 +70,11 @@ class Camera {
     this._c = Math.cos(this.yaw); this._s = Math.sin(this.yaw);
     this.shake = Math.max(0, this.shake - dt * 1.6);
     const sh = this.shake * this.shake * 9;
+    // on a narrow screen the world slides down so a pinned readout
+    // never sits on top of the thing it is describing
+    this.panY = damp(this.panY, this.tPanY, 6, dt);
     this.ox = Math.sin(t * 47) * sh + Math.sin(t * 0.23) * 2.0;
-    this.oy = Math.cos(t * 41) * sh + Math.cos(t * 0.19) * 1.6;
+    this.oy = Math.cos(t * 41) * sh + Math.cos(t * 0.19) * 1.6 + this.panY;
   }
 }
 

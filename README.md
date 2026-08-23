@@ -6,11 +6,22 @@ no list — the work *is* the city, and you navigate it by moving through space.
 **→ [Open the city](https://jaiparmani.github.io/meridian-city/)**
 
 No build, no server, no dependencies. Clone it and open `index.html`.
-Press `I` to load your own work into it.
+**The first visit walks you through it.** Press `I` to load your own work into it.
 
 ![The whole organisation](docs/organisation.jpg)
 
 ---
+
+## It shows you around
+
+A city is not self-explanatory, so the first visit doesn't drop you in cold.
+The camera flies to each thing in turn and says what it is — a structure, a
+vehicle, a jam, a neighbourhood, the weather — then stands back and asks you to
+do one thing yourself: clear a blockage and watch the queue drain.
+
+![The walkthrough handing over control](docs/walkthrough.jpg)
+
+Nine beats, skippable at any point, and `G` replays it whenever you like.
 
 ## What the city is
 
@@ -130,6 +141,20 @@ light. Ignore it and it burns out on its own: **a floor comes off the tower**,
 the milestone is un-shipped, the deadline pulls in two and a half days, and the
 team takes a morale hit. The city does not wait for you.
 
+### Time
+
+A segmented control above the valve: hold, quarter, half, normal, double,
+quadruple. `,` and `.` step through it and `space` holds. Fast-forward takes
+*more small steps* rather than bigger ones — one large timestep would let
+vehicles jump straight over junctions and the traffic model would quietly stop
+meaning anything. Measured at 4×, the clock runs at 4.02× with nothing off its
+road.
+
+There is no rewind. Scrubbing backwards would need full state snapshots of
+every agent, and the event stream draws on `Math.random`, so the past cannot be
+re-derived — it would have to be recorded. That was more machinery than the
+feature was worth.
+
 ### Morale
 
 Every team carries morale, and it multiplies their throughput. `CRUNCH` buys
@@ -244,12 +269,23 @@ Nothing pops into existence.
 | `1`–`5` | jump to an altitude |
 | `space` | hold time |
 | `[` `]` | close / open the intake valve |
+| `,` `.` | slower / faster |
+| `G` | replay the walkthrough |
 | `I` | load real work into the city |
 | `H` | the legend |
 | `R` | reset rotation |
 
 When you track something, anything standing between you and it turns to glass,
 and a locator beam marks it through the skyline.
+
+### On a phone
+
+Below 780px it rearranges: the readout pins across the top, the world slides
+down so whatever you selected is never underneath it, the command ring grows to
+finger size and fans into the clear space, and the signal feed and zoom rail
+stand down. Tap to select, drag to move, pinch to change altitude.
+
+![The city on a phone](docs/phone.jpg)
 
 ![The legend](docs/legend.jpg)
 
@@ -269,6 +305,7 @@ js/actions.js   the commands, and what each one does to the city
 js/import.js    the file format, GitHub ingestion, and serialising back out
 js/persist.js   saving to localStorage and exporting a city as a file
 js/tour.js      what the city does when nobody is driving
+js/guide.js     the walkthrough, and the one thing it asks you to do
 js/render.js    camera and renderer
 js/hud.js       instrumentation, tracking labels, readouts, command ring
 js/main.js      boot, input, picking, navigation
