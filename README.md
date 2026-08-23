@@ -271,12 +271,38 @@ Nothing pops into existence.
 | `[` `]` | close / open the intake valve |
 | `,` `.` | slower / faster |
 | `G` | replay the walkthrough |
+| `M` | sound on / off |
 | `I` | load real work into the city |
 | `H` | the legend |
 | `R` | reset rotation |
 
 When you track something, anything standing between you and it turns to glass,
 and a locator beam marks it through the skyline.
+
+### Sound
+
+Press `M`. Nothing is playing until you ask — browsers require a gesture before
+audio, and a page that starts making noise at you is a bad neighbour.
+
+There are no audio files. Every sound is built from oscillators and filtered
+noise at runtime, so it costs a few kilobytes of arithmetic rather than a
+download:
+
+| | |
+|---|---|
+| **the hum** | four detuned oscillators under a lowpass — a lot of people in one place |
+| **traffic** | filtered noise tracking how many vehicles are actually moving |
+| **the jam** | two sawtooths a beat apart, wobbling like idling engines |
+| **rain** | noise through a highpass that opens as the storm builds |
+| **thunder** | a noise burst swept from 420Hz down to 70 over two seconds |
+| **a milestone** | a bell, pitched by the hue of the team that shipped it |
+| **sirens** | a two-tone square panned to wherever the trouble is on screen |
+
+Descending changes what you hear: from altitude the city is a distant hum, at
+street level the filters open and the traffic comes forward. The sound layer
+*reads* the simulation and never the other way round — `sim.js` does not know
+`sound.js` exists, and a milestone chimes because the audio noticed a floor go
+up, not because anything told it to.
 
 ### On a phone
 
@@ -306,6 +332,7 @@ js/import.js    the file format, GitHub ingestion, and serialising back out
 js/persist.js   saving to localStorage and exporting a city as a file
 js/tour.js      what the city does when nobody is driving
 js/guide.js     the walkthrough, and the one thing it asks you to do
+js/sound.js     the city, synthesised — no audio files
 js/render.js    camera and renderer
 js/hud.js       instrumentation, tracking labels, readouts, command ring
 js/main.js      boot, input, picking, navigation

@@ -93,6 +93,7 @@ function resize() {
   cam.resize(w, h);
 }
 window.addEventListener('resize', resize);
+document.addEventListener('visibilitychange', () => sound.visibility());
 resize();
 
 /* ---------- camera intro --------------------------------- */
@@ -104,6 +105,10 @@ cam.radiusHint = city.radius * 1.6;
 /* ---------- input ---------------------------------------- */
 let drag = null, zoomAnchor = null, lastMouse = { x: 0, y: 0 }, moved = 0;
 
+function soundAt(mx, my) {
+  const b = hud.soundBox;
+  return b && mx >= b[0] && mx <= b[0] + b[2] && my >= b[1] && my <= b[1] + b[3];
+}
 function speedAt(mx, my) {
   const list = hud.speedBoxes || [];
   for (const b of list) {
@@ -123,6 +128,7 @@ function setIntakeFrom(mx) {
 
 canvas.addEventListener('mousedown', (e) => {
   tour.poke();
+  if (soundAt(e.clientX, e.clientY)) { sound.toggle(); drag = { consumed: true }; return; }
   const sp = speedAt(e.clientX, e.clientY);
   if (sp) {
     if (sp.pause) ui.paused = !ui.paused; else setSpeed(sp.val);
@@ -161,6 +167,11 @@ window.addEventListener('mousemove', (e) => {
     }
     drag.x = e.clientX; drag.y = e.clientY;
   } else {
+    if (soundAt(e.clientX, e.clientY)) {
+      ui.hover = null; ui.ringHover = -1;
+      canvas.style.cursor = 'pointer';
+      return;
+    }
     if (guideBtnAt(e.clientX, e.clientY)) {
       ui.hover = null; ui.ringHover = -1;
       canvas.style.cursor = 'pointer';
@@ -266,6 +277,7 @@ window.addEventListener('keydown', (e) => {
   else if (k === 'f') toggleFollow();
   else if (k === 'r') { cam.tyaw = -0.52; }
   else if (k >= '1' && k <= '5') gotoLevel(+k - 1);
+  else if (k === 'm') sound.toggle();
   else if (k === ',') stepSpeed(-1);
   else if (k === '.') stepSpeed(1);
   else if (k === '[') org.intake = clamp(org.intake - 0.2, 0, 2);
@@ -328,6 +340,7 @@ function guideBtnAt(mx, my) {
 
 function click(mx, my, wasRot) {
   if (wasRot) return;
+  if (soundAt(mx, my)) { sound.toggle(); return; }
   const sp = speedAt(mx, my);
   if (sp) { if (sp.pause) ui.paused = !ui.paused; else setSpeed(sp.val); return; }
   if (inIntake(mx, my)) { setIntakeFrom(mx); return; }
@@ -615,6 +628,8 @@ function frame(now) {
   if (!guide.active) tour.update(dt, sim, city, org, ui);
   ui.guide = guide;
   ui.tour = tour;
+  sound.update(dt, sim, cam, ui);
+  ui.sound = sound;
   cam.tPanY = (ui.compact && ui.selected) ? 120 : 0;
   ui.level = lodOf(cam.s);
   R.draw(sim, cam, ui, dt);
@@ -634,5 +649,5 @@ setTimeout(() => { cam.ts = 0.95; }, 300);
 
 /* expose the running city for inspection / automation */
 window.APP = { org, city, sim, cam, ui, hud, R, flyTo, gotoLevel, select, pickAt, ringAt,
-  rebuildFrom, tour, guide, persist, setSpeed, stepSpeed,
+  rebuildFrom, tour, guide, persist, sound, setSpeed, stepSpeed,
   get fps() { return fps; } };

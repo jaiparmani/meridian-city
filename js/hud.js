@@ -341,6 +341,7 @@ class HUD {
       ctx.fillStyle = AM;
       ctx.fillRect(W / 2 - 70 + 140 * alt0 - 1, 29, 2, 8);
       ctx.restore();
+      this.soundToggle(ctx, sim, cam, ui, b);
       this.rightRail(ctx, sim, cam, ui, lod, b);
       return;
     }
@@ -392,7 +393,11 @@ class HUD {
     ctx.restore();
 
       }
-  /* compass */
+
+    /* sound */
+    this.soundToggle(ctx, sim, cam, ui, b);
+
+    /* compass */
     const cx = W - 62, cy = ui.compact ? 60 : 74;
     ctx.save();
     ctx.globalAlpha = b * 0.85;
@@ -474,6 +479,54 @@ class HUD {
     ctx.font = `500 8px ${MONO}`;
     ctx.fillStyle = 'rgba(150,190,215,0.5)';
     ctx.fillText('drag  ·  [ ]', x, y + h + 12);
+    ctx.restore();
+  }
+
+  /* sound is off until asked for, and says so once */
+  soundToggle(ctx, sim, cam, ui, b) {
+    const on = ui.sound && ui.sound.enabled;
+    const w = 30, h = 24;
+    const x = cam.W - (ui.compact ? 44 : 112), y = ui.compact ? 84 : 108;
+    this.soundBox = [x - 6, y - 6, w + 12, h + 12];
+    ctx.save();
+    ctx.globalAlpha = b;
+    ctx.strokeStyle = on ? 'rgba(127,233,255,0.75)' : 'rgba(150,190,215,0.35)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, w, h);
+    ctx.fillStyle = on ? CY : 'rgba(160,200,225,0.55)';
+    const sx = x + 9, sy = y + h / 2;
+    ctx.beginPath();
+    ctx.moveTo(sx - 3, sy - 3); ctx.lineTo(sx, sy - 3); ctx.lineTo(sx + 4, sy - 7);
+    ctx.lineTo(sx + 4, sy + 7); ctx.lineTo(sx, sy + 3); ctx.lineTo(sx - 3, sy + 3);
+    ctx.closePath(); ctx.fill();
+    if (on) {
+      const lvl = 0.5 + 0.5 * Math.sin(sim.time * 3);
+      ctx.strokeStyle = `rgba(127,233,255,${0.5 + lvl * 0.5})`;
+      ctx.lineWidth = 1.3;
+      for (let i = 1; i <= 2; i++) {
+        ctx.beginPath();
+        ctx.arc(sx + 5, sy, 3 + i * 3.2, -0.7, 0.7);
+        ctx.stroke();
+      }
+    } else {
+      ctx.strokeStyle = 'rgba(180,205,225,0.6)';
+      ctx.lineWidth = 1.3;
+      ctx.beginPath();
+      ctx.moveTo(sx + 9, sy - 4); ctx.lineTo(sx + 16, sy + 4);
+      ctx.moveTo(sx + 16, sy - 4); ctx.lineTo(sx + 9, sy + 4);
+      ctx.stroke();
+    }
+    ctx.font = `600 8px ${MONO}`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(160,200,225,0.55)';
+    ctx.fillText('M', x + w / 2, y + h + 9);
+    if (ui.sound && ui.sound.hint > 0) {
+      ctx.font = `600 9px ${MONO}`;
+      ctx.textAlign = 'right';
+      ctx.globalAlpha = b * clamp(ui.sound.hint);
+      ctx.fillStyle = on ? CY : 'rgba(180,210,230,0.8)';
+      ctx.fillText(on ? 'SOUND ON' : 'SOUND OFF', x - 10, y + h / 2);
+    }
     ctx.restore();
   }
 
@@ -1294,6 +1347,7 @@ class HUD {
       ['F', 'lock the camera onto a moving task'],
       ['SPACE / 1-5', 'hold time · jump to an altitude'],
       ['G / I', 'replay the walkthrough · load your own work'],
+      ['M', 'sound — the city is synthesised, not recorded'],
     ];
     rows.forEach(([k, v], i) => {
       const yy = y + 54 + i * 13.5;
